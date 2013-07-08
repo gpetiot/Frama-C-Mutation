@@ -1,0 +1,45 @@
+
+
+The plug-in triggers each possible mutation and outputs results into C files.
+
+
+Options :
+
+-mut-int-arith
+	generates mutations on operators +, -, *, /, %  over ints and floats
+	+ and -
+	*, / and %
+	for example : a + b -> a - b
+	for example : a * b -> a / b, a % b
+	    
+-mut-ptr-arith
+	generates mutations on operators +, - over pointers
+	for example : p + i -> p - i
+
+-mut-logic-and-or
+	generates mutations on operators ||, &&
+	for example : a && b -> a || b
+
+-mut-comp
+	generates mutations on operators >, >=, <, <=, ==, !=
+	== and != can only be mutated into != and ==
+	for example : x < y -> x <= y, x > y, x >= y, x == y, x != y
+	for example : x == y -> x != y
+
+-mut-cond
+	generates mutations over if conditions
+	for example : if (b) -> if (!b)
+
+-mut-free
+	generates mutations by deletion of `free` statements
+
+-mut-lval
+	generates mutations on lvalues, replacing once by another in the same
+	scope and with (quite) compatible type
+	for example :
+	    void f (int x) {
+	    	 int i;
+		 i = x + 1; -> i = i + 1;
+	    }
+
+
