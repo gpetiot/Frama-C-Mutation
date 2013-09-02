@@ -164,14 +164,6 @@ end
 class mutation_visitor prj mut name = object
   inherit Visitor.frama_c_copy prj
 
-  method vglob_aux glob =
-    match glob with
-      | GFun (f, loc) when f.svar.vname = name ->
-	ChangeDoChildrenPost
-	  ([glob], fun x -> (GFun(emptyFunction "main", loc))::x)
-      | GFun _ -> ChangeDoChildrenPost ([glob], (fun x -> x))
-      | _ -> JustCopy
-
   method vexpr exp =
     let f e =
       let loc = e.eloc in
@@ -202,57 +194,10 @@ class mutation_visitor prj mut name = object
 end
 
 
-class keep_only_main prj name = object
-  inherit Visitor.frama_c_copy prj
-  method vglob_aux = function
-    | GFun (f,_) when f.svar.vname = "main"
-		 || f.svar.vname = "e_acsl_global_init" -> JustCopy
-    | GFun (f,loc) when f.svar.vname = name
-		   || f.svar.vname = "__e_acsl_" ^ name ->
-      ChangeTo [GVarDecl(f.sspec,f.svar,loc)]
-    | _ -> ChangeTo []
-end
 
-class delete_main prj = object
-  inherit Visitor.frama_c_copy prj
-  method vglob_aux = function
-    | GFun (f,_) when f.svar.vname = "main" -> ChangeTo []
-    | _ -> JustCopy
-end
-
-class fix_malloc_free = object
-  inherit Visitor.frama_c_inplace
-
-  method vstmt_aux stmt =
-    let f s =
-      match s.skind with
-      | Instr(Call(_, {eloc=_;enode=Lval(Var vi, _)}, _, _)) ->
-	(if vi.vname = "__e_acsl_malloc" then vi.vname <- "__malloc"
-	else if vi.vname = "__e_acsl_free" then vi.vname <- "__free"
-	else if vi.vname = "__e_acsl_realloc" then vi.vname <- "__realloc"
-	else if vi.vname = "__e_acsl_calloc" then vi.vname <- "__calloc"
-	else ()); s
-      | _ -> s
-    in ChangeDoChildrenPost (stmt, f)
-end
-
-class skip_clean = object
-  inherit Visitor.frama_c_inplace
-
-  method vstmt_aux stmt =
-    let f s =
-      match s.skind with
-      | Instr (Call(_, {eloc=l;enode=Lval(Var vi, _)},_,_)) ->
-	if vi.vname = "__clean" then mkStmtOneInstr (Skip l)
-	else s
-      | _ -> s
-    in ChangeDoChildrenPost (stmt, f)
-end
-
-
-let generate_code =
-  Dynamic.get ~plugin:"E_ACSL" "generate_code"
-    (Datatype.func Datatype.string Project.ty)
+let run_pcva =
+  Dynamic.get ~plugin:"PrePC" "run"
+    (Datatype.func Datatype.unit Datatype.unit)
 
 
 let run() =
@@ -263,166 +208,51 @@ let run() =
     if List.length !mutations = 0 then
       Options.Self.feedback "aucune mutation"
     else
-      let files = Kernel.Files.get() in
-      let first_file = List.hd files in
-      let files = List.fold_left (fun a b -> a ^ " " ^ b) "" files in
-      let _ =
-	Sys.command
-	  (Printf.sprintf
-	     "frama-c %s -main %s -pc -pc-verbose 0 -kernel-verbose 0"
-	     files funcname) in
-      let testdrivers_dir = Filename.dirname (List.hd (Kernel.Files.get())) in
-      let testdrivers_dir = Filename.concat testdrivers_dir
-	("testcases_"^
-	    (Filename.chop_extension (Filename.basename (first_file)))) in
-      let testdrivers_dir = Filename.concat testdrivers_dir funcname in
-      let testdrivers_dir = Filename.concat testdrivers_dir "testdrivers" in
-      let testdrivers = Array.to_list (Sys.readdir testdrivers_dir) in
-      let testdrivers = List.filter (fun s -> Filename.check_suffix s ".c")
-	testdrivers in
-      let lanceur_params = "pathcrawler_"^
-	(Filename.chop_extension (Filename.basename first_file)) in
-      let lanceur_params = Filename.concat lanceur_params
-	("lanceur_"^funcname^"_params.h") in
-      let params_file = open_in lanceur_params in
-      let rec aux ret =
-	try
-	  let s = input_line params_file in aux (ret^" "^s^"\n")
-	with
-	    End_of_file -> ret in
-      let params = aux "" in
-      let () = close_in params_file in
-      let () = List.iter (fun f ->
-	let complete_name = Filename.concat testdrivers_dir f in
-	let file = File.from_filename complete_name in
-	let prj = Project.create "__mut1" in
-	let () = Project.copy
-	  ~selection:(State_selection.of_list
-			[Kernel.Machdep.self; Kernel.CppExtraArgs.self]) prj in
-	let () = Project.on prj (fun () -> File.init_from_c_files [file]) () in
-	let prj2 = Project.on prj (fun () ->
-	  Globals.set_entry_point "main" false;
-	  generate_code "__mut2") () in
-	let prj3 = Project.on prj2 (fun () ->
-	  File.create_project_from_visitor "__mut3"
-	    (fun p -> new keep_only_main p funcname)) () in
-	let () = Project.on prj3 (fun () -> Visitor.visitFramacFile
-	  (new fix_malloc_free :> Visitor.frama_c_inplace) (Ast.get())) () in
-	let chan = open_out ((Filename.chop_extension complete_name)^".i") in
-	let () = output_string chan params in
-	let () = output_string chan "extern void __clean();\n" in
-	let () = output_string chan "extern void* __malloc(unsigned int);\n" in
-	let () = output_string chan "extern void __initialize(void*,int);\n" in
-	let () = output_string chan "extern void __free(void* );\n" in
-	let () = output_string chan "extern void __full_init(void* );\n" in
-	let () = output_string chan "extern void __delete_block(void* );\n" in
-	let () = output_string chan "extern void __store_block(void*,int);\n" in
-	let fmt = Format.formatter_of_out_channel chan in
-	let () = Project.on prj3 (fun () -> File.pretty_ast ~fmt ()) () in
-	let () = flush chan in
-	let () = close_out chan in
-	List.iter (fun p -> Project.on p (fun () -> Project.remove()) ())
-	  [prj;prj2;prj3]
-      ) testdrivers in
-      let testdrivers = List.map (fun t ->
-	(Filename.chop_extension (Filename.concat testdrivers_dir t))^".i"
-      ) testdrivers in
-      let eacsldir = "~/e-acsl/share/e-acsl" in
       let trace = ref [] in
       let all_mutants_cpt = ref 0 in
       let killed_mutants_cpt = ref 0 in
       let mutants_not_killed = ref [] in
-
-      (********************)
-      let () = Globals.set_entry_point "main" false in
-      let prj5 = generate_code "__mut5" in
-      let () = Project.set_current prj5 in
-      let prj6 = File.create_project_from_visitor "__mut6"
-	(fun p -> new delete_main p) in
-      let () = Project.on prj6 (fun () -> Visitor.visitFramacFile
-	(new skip_clean :> Visitor.frama_c_inplace) (Ast.get())) () in
-      let () = Project.set_current prj6 in
-      let filename = "orig.c" in
-      let chan = open_out filename in
-      let fmt = Format.formatter_of_out_channel chan in
-      let () = File.pretty_ast ~fmt () in
-      let () = flush chan in
-      let () = close_out chan in
-      let () = List.iter (fun p -> Project.remove ~project:p ()) [prj5;prj6] in
-      let rec test = function
-	| [] -> ()
-	| testdriver::t ->
-	  let execname =
-	    (Filename.chop_extension (Filename.basename testdriver))
-	    ^"_"^"orig.out" in
-	  let opt = "-pedantic -Wno-long-long -Wno-attributes -fno-builtin" in
-	  let cmd = Printf.sprintf
-	    "gcc -std=c99 %s -o %s %s %s %s/*.c %s/memory_model/*.c && ./%s"
-	    opt execname filename testdriver eacsldir eacsldir execname in
-	  let ret = Sys.command cmd in
-	  if ret = 1 then
-	    let () = Options.Self.result "[KO] %s & %s" filename testdriver in
-	    failwith "orig fails!"
-	  else
-	    test t
-      in
-      let () = test testdrivers in
-      (********************)
-
       let rec mutate cpt = function
 	| [] -> ()
 	| h::t ->
-	  let prj4 = File.create_project_from_visitor "__mut4"
-	    (fun p -> new mutation_visitor p h funcname) in
-	  let () = Project.set_current prj4 in
-	  let () = Globals.set_entry_point funcname false in
-	  let () = !Db.RteGen.compute() in
-	  let () = Globals.set_entry_point "main" false in
-	  let prj5 = generate_code "__mut5" in
-	  let () = Project.set_current prj5 in
-	  let prj6 = File.create_project_from_visitor "__mut6"
-	    (fun p -> new delete_main p) in
-	  let () = Project.on prj6 (fun () -> Visitor.visitFramacFile
-	    (new skip_clean :> Visitor.frama_c_inplace) (Ast.get())) () in
-	  let () = Project.set_current prj6 in
-	  let filename = "mutant_"^(string_of_int cpt)^".c" in
-	  let chan = open_out filename in
-	  let fmt = Format.formatter_of_out_channel chan in
-	  let () = File.pretty_ast ~fmt () in
-	  let () = flush chan in
-	  let () = close_out chan in
-	  let () = List.iter (fun p -> Project.remove ~project:p ())
-	    [prj4;prj5;prj6] in
+	  let prj4 =
+	    File.create_project_from_visitor ("__mut"^(string_of_int cpt))
+	      (fun p -> new mutation_visitor p h funcname) in
+	  let () = Project.copy ~selection:(Plugin.get_selection()) prj4 in
+	  let () = Project.on prj4 (fun () ->
+	    let () = Globals.set_entry_point funcname false in
+	    let filename = "mutant_"^(string_of_int cpt)^".c" in
+	    let chan = open_out filename in
+	    let fmt = Format.formatter_of_out_channel chan in
+	    let () = File.pretty_ast ~fmt () in
+	    let () = flush chan in
+	    let () = close_out chan in
+	    let files = Kernel.Files.get () in
+	    let () = Kernel.Files.set (filename :: (List.tl files)) in
+	    let () = run_pcva () in
+	    let bo = Property_status.fold (fun prop b ->
+	      b && match Property_status.get prop with
+	      | Property_status.Best (Property_status.False_and_reachable,_)
+	      | Property_status.Best (Property_status.False_if_reachable,_) ->
+		false
+	      | _ -> true ) true
+	    in
+	    (*let _ = Sys.command "rm -rf pathcrawler_bubblesort" in*)
+	    if bo then
+	      (* mutant not killed *)
+	      mutants_not_killed := (cpt, h) :: !mutants_not_killed
+	    else
+	      (* mutant killed *)
+	      let () = killed_mutants_cpt := !killed_mutants_cpt +1 in
+	      trace :=
+		(Printf.sprintf "%s (%s)"
+		   (mutation_to_string h) filename) :: !trace
+	  ) () in
+	  (*let () = Project.remove ~project:prj4 () in*)
 	  let () = all_mutants_cpt := !all_mutants_cpt + 1 in
-	  let rec test = function
-	    | [] -> mutants_not_killed := (cpt, h) :: !mutants_not_killed
-	    | testdriver::t ->
-	      let execname =
-		(Filename.chop_extension (Filename.basename testdriver))
-		^"_"^"mutant_"^(string_of_int cpt)^".out" in
-	      let opt="-pedantic -Wno-long-long -Wno-attributes -fno-builtin" in
-	      let files = Printf.sprintf "%s %s %s/*.c %s/memory_model/*.c"
-		filename testdriver eacsldir eacsldir in
-	      let exec_cmd = "~/timeout3 -t 5" in
-	      let cmd = Printf.sprintf "gcc -std=c99 %s -o %s %s && %s ./%s"
-		opt execname files exec_cmd execname in
-	      let () = Options.Self.debug ~level:2 "%s + %s"
-		filename testdriver in
-	      let ret = Sys.command cmd in
-	      if ret = 1 then
-		killed_mutants_cpt := !killed_mutants_cpt +1
-	      else
-		let () =
-		  trace :=
-		    (Printf.sprintf "%s (%s) & %s"
-		       (mutation_to_string h) filename testdriver) :: !trace in
-		test t
-	  in
-	  let () = test testdrivers in
 	  mutate (cpt+1) t in
       let () = mutate 0 (List.rev !mutations) in
       let () = List.iter (fun s -> Options.Self.debug ~level:2 "%s" s) !trace in
-      let () = Options.Self.result "%i test cases" (List.length testdrivers) in
       let () = Options.Self.result "%i mutants" !all_mutants_cpt in
       let () = Options.Self.result "%i mutants killed" !killed_mutants_cpt in
       Options.Self.result "%i not killed" (List.length !mutants_not_killed);
