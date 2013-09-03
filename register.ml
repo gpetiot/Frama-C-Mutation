@@ -194,10 +194,11 @@ class mutation_visitor prj mut name = object
 end
 
 
-
+(*
 let run_pcva =
   Dynamic.get ~plugin:"PrePC" "run"
     (Datatype.func Datatype.unit Datatype.unit)
+*)
 
 
 let run() =
@@ -211,7 +212,7 @@ let run() =
       let trace = ref [] in
       let all_mutants_cpt = ref 0 in
       let killed_mutants_cpt = ref 0 in
-      let mutants_not_killed = ref [] in
+      let recap = ref ["|      | Killed |   Not  |"] in
       let rec mutate cpt = function
 	| [] -> ()
 	| h::t ->
@@ -220,6 +221,7 @@ let run() =
 	      (fun p -> new mutation_visitor p h funcname) in
 	  let () = Project.copy ~selection:(Plugin.get_selection()) prj4 in
 	  let () = Project.on prj4 (fun () ->
+	    let () = Options.Self.feedback "mutant %i" cpt in
 	    let () = Globals.set_entry_point funcname false in
 	    let filename = "mutant_"^(string_of_int cpt)^".c" in
 	    let chan = open_out filename in
@@ -227,8 +229,14 @@ let run() =
 	    let () = File.pretty_ast ~fmt () in
 	    let () = flush chan in
 	    let () = close_out chan in
-	    let files = Kernel.Files.get () in
-	    let () = Kernel.Files.set (filename :: (List.tl files)) in
+	    let pc_options = "-pc-no-xml -pc-no-drivers" in
+	    let werror_options = "-werror-no-unknown -werror-no-external" in
+	    let cmd =
+	      Printf.sprintf
+		"frama-c %s -main %s -val -rte -then -prepc %s -then -werror %s > /dev/null 2>&1"
+		filename funcname pc_options werror_options in
+	    let ret = Sys.command cmd in
+(*
 	    let () = run_pcva () in
 	    let bo = Property_status.fold (fun prop b ->
 	      b && match Property_status.get prop with
@@ -237,12 +245,15 @@ let run() =
 		false
 	      | _ -> true ) true
 	    in
-	    (*let _ = Sys.command "rm -rf pathcrawler_bubblesort" in*)
 	    if bo then
-	      (* mutant not killed *)
-	      mutants_not_killed := (cpt, h) :: !mutants_not_killed
-	    else
-	      (* mutant killed *)
+*)
+	    let str = Printf.sprintf "| %4i |   %c    |   %c    | %s" cpt
+	      (if ret = 0 then ' ' else 'X')
+	      (if ret = 0 then 'X' else ' ')
+	      (mutation_to_string h)
+	    in
+	    recap := "--------------------------" :: str :: !recap;
+	    if ret <> 0 then
 	      let () = killed_mutants_cpt := !killed_mutants_cpt +1 in
 	      trace :=
 		(Printf.sprintf "%s (%s)"
@@ -253,12 +264,10 @@ let run() =
 	  mutate (cpt+1) t in
       let () = mutate 0 (List.rev !mutations) in
       let () = List.iter (fun s -> Options.Self.debug ~level:2 "%s" s) !trace in
+      let recap = List.rev !recap in
+      let () = List.iter (fun s -> Options.Self.feedback "%s" s) recap in
       let () = Options.Self.result "%i mutants" !all_mutants_cpt in
       let () = Options.Self.result "%i mutants killed" !killed_mutants_cpt in
-      Options.Self.result "%i not killed" (List.length !mutants_not_killed);
-      List.iter
-	(fun (i, m) -> Options.Self.result "%i: %s" i (mutation_to_string m))
-	!mutants_not_killed;
       mutations := []
 	
 	
