@@ -213,6 +213,7 @@ let run() =
       let all_mutants_cpt = ref 0 in
       let killed_mutants_cpt = ref 0 in
       let recap = ref ["|      | Killed |   Not  |"] in
+      let () = Options.Self.feedback "%i mutants" (List.length !mutations) in
       let rec mutate cpt = function
 	| [] -> ()
 	| h::t ->
@@ -233,7 +234,7 @@ let run() =
 	    let werror_options = "-werror-no-unknown -werror-no-external" in
 	    let cmd =
 	      Printf.sprintf
-		"frama-c %s -main %s -val -rte -then -prepc %s -then -werror %s > /dev/null 2>&1"
+		"frama-c %s -main %s -no-unicode -val -rte -then -prepc %s -then -werror %s > /dev/null 2>&1"
 		filename funcname pc_options werror_options in
 	    let ret = Sys.command cmd in
 (*
