@@ -194,11 +194,11 @@ class mutation_visitor prj mut name = object
 end
 
 
-(*
+
 let run_pcva =
   Dynamic.get ~plugin:"PrePC" "run"
     (Datatype.func Datatype.unit Datatype.unit)
-*)
+
 
 
 let run() =
@@ -230,37 +230,41 @@ let run() =
 	    let () = File.pretty_ast ~fmt () in
 	    let () = flush chan in
 	    let () = close_out chan in
+(*
 	    let pc_options = "-pc-no-xml -pc-no-drivers" in
-	    let werror_options = "-werror-no-unknown -werror-no-external" in
+	    let werror = "-werror -werror-no-unknown -werror-no-external" in
+            let val = "-val -val-verbose 0" in
+            let rte = "-rte" in
 	    let cmd =
 	      Printf.sprintf
-		"frama-c %s -main %s -no-unicode -val -rte -then -prepc %s -then -werror %s > /dev/null 2>&1"
-		filename funcname pc_options werror_options in
+		"frama-c %s -main %s -no-unicode %s %s -then -prepc %s -then %s"
+		filename funcname val rte pc_options werror in
 	    let ret = Sys.command cmd in
-(*
+*)
+	    let () = !Db.RteGen.compute() in
+	    let () = !Db.Value.compute() in
 	    let () = run_pcva () in
-	    let bo = Property_status.fold (fun prop b ->
+	    let ret = Property_status.fold (fun prop b ->
 	      b && match Property_status.get prop with
 	      | Property_status.Best (Property_status.False_and_reachable,_)
 	      | Property_status.Best (Property_status.False_if_reachable,_) ->
 		false
 	      | _ -> true ) true
 	    in
-	    if bo then
-*)
+
 	    let str = Printf.sprintf "| %4i |   %c    |   %c    | %s" cpt
-	      (if ret = 0 then ' ' else 'X')
-	      (if ret = 0 then 'X' else ' ')
+	      (if ret then ' ' else 'X')
+	      (if ret then 'X' else ' ')
 	      (mutation_to_string h)
 	    in
 	    recap := "--------------------------" :: str :: !recap;
-	    if ret <> 0 then
+	    if not ret then
 	      let () = killed_mutants_cpt := !killed_mutants_cpt +1 in
 	      trace :=
 		(Printf.sprintf "%s (%s)"
 		   (mutation_to_string h) filename) :: !trace
 	  ) () in
-	  (*let () = Project.remove ~project:prj4 () in*)
+	  let () = Project.remove ~project:prj4 () in
 	  let () = all_mutants_cpt := !all_mutants_cpt + 1 in
 	  mutate (cpt+1) t in
       let () = mutate 0 (List.rev !mutations) in
