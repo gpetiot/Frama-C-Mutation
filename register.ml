@@ -185,7 +185,8 @@ class mutation_visitor prj mut name = object
       match (s.skind, mut) with
 	| (Instr(Call(_, {eloc=loc;enode=Lval(Var{vname="free"}, _)}, _, _)),
 	   Free (_, l))
-	    when (Cil_datatype.Location.compare loc l) = 0 -> mkStmtCfgBlock []
+	    when (Cil_datatype.Location.compare loc l) = 0 ->
+	  mkStmtCfgBlock []
 	| (If (_, b1, b2, loc), Cond (_, e2, l))
 	    when (Cil_datatype.Location.compare loc l) = 0 ->
 	  mkStmt (If (e2, b1, b2, loc))
@@ -196,9 +197,9 @@ end
 
 
 let run_pcva =
-  Dynamic.get ~plugin:"PrePC" "run"
+  Dynamic.get ~plugin:"PCVA" "run_pcva"
     (Datatype.func Datatype.unit Datatype.unit)
-
+  
 
 
 let run() =
@@ -246,8 +247,7 @@ let run() =
 	    let () = run_pcva () in
 	    let ret = Property_status.fold (fun prop b ->
 	      b && match Property_status.get prop with
-	      | Property_status.Best (Property_status.False_and_reachable,_)
-	      | Property_status.Best (Property_status.False_if_reachable,_) ->
+	      | Property_status.Best (Property_status.False_and_reachable,_) ->
 		false
 	      | _ -> true ) true
 	    in
