@@ -160,6 +160,9 @@ class gather_mutations funcname = object(self)
 end
 
 
+let same_locs l1 l2 =
+  (Cil_datatype.Location.compare l1 l2) = 0
+
 
 class mutation_visitor prj mut name = object
   inherit Visitor.frama_c_copy prj
@@ -168,29 +171,30 @@ class mutation_visitor prj mut name = object
     let f e =
       let loc = e.eloc in
       match (e.enode, mut) with
-	| BinOp (_, e1, e2, ty), Int_Arith (_, b2, l)
-	| BinOp (_, e1, e2, ty), Ptr_Arith (_, b2, l)
-	| BinOp (_, e1, e2, ty), Logic_And_Or (_, b2, l)
-	| BinOp (_, e1, e2, ty), Comp (_, b2, l)
-	  when (Cil_datatype.Location.compare loc l) = 0 ->
-	  new_exp ~loc (BinOp (b2, e1, e2, ty))
-	| Lval _, Mut_Lval (_, v2, l)
-	  when (Cil_datatype.Location.compare loc l) = 0 ->
-	  new_exp ~loc (Lval v2)
-	| _ -> copy_exp e in
+      | BinOp (_, e1, e2, ty), Int_Arith (_, b2, l)
+      | BinOp (_, e1, e2, ty), Ptr_Arith (_, b2, l)
+      | BinOp (_, e1, e2, ty), Logic_And_Or (_, b2, l)
+      | BinOp (_, e1, e2, ty), Comp (_, b2, l) when same_locs loc l ->
+	new_exp ~loc (BinOp (b2, e1, e2, ty))
+      | Lval _, Mut_Lval (_, v2, l) when same_locs loc l ->
+	new_exp ~loc (Lval v2)
+      | _ -> e
+    in
     ChangeDoChildrenPost (exp, f)
 
   method vstmt_aux stmt =
     let f s =
       match (s.skind, mut) with
-	| (Instr(Call(_, {eloc=loc;enode=Lval(Var{vname="free"}, _)}, _, _)),
-	   Free (_, l))
-	    when (Cil_datatype.Location.compare loc l) = 0 ->
-	  mkStmtCfgBlock []
-	| (If (_, b1, b2, loc), Cond (_, e2, l))
-	    when (Cil_datatype.Location.compare loc l) = 0 ->
-	  mkStmt (If (e2, b1, b2, loc))
-	| _ -> s in
+      |(Instr(Call(_,{eloc=loc;enode=Lval(Var{vname="free"},_)},_,_)),Free(_,l))
+	  when same_locs loc l ->
+	mkStmtCfgBlock []
+      | If({enode=UnOp(LNot,e,_)},b1,b2,loc),Cond(_,_,l) when same_locs loc l ->
+	mkStmt(If(e,b1,b2,loc))
+      | (If (e, b1, b2, loc), Cond (_, _, l)) when same_locs loc l ->
+	let new_e = new_exp loc (UnOp (LNot, e, intType)) in
+	mkStmt (If (new_e, b1, b2, loc))
+      | _ -> s
+    in
     ChangeDoChildrenPost (stmt, f)
 end
 
@@ -205,8 +209,8 @@ let run_pcva =
 let run() =
   if Options.Enabled.get() then
     let funcname = Kernel_function.get_name (fst (Globals.entry_point())) in
-    let () = Visitor.visitFramacFile
-      (new gather_mutations funcname :> Visitor.frama_c_inplace) (Ast.get()) in
+     Visitor.visitFramacFile
+      (new gather_mutations funcname :> Visitor.frama_c_inplace) (Ast.get());
     if List.length !mutations = 0 then
       Options.Self.feedback "aucune mutation"
     else
@@ -214,43 +218,48 @@ let run() =
       let all_mutants_cpt = ref 0 in
       let killed_mutants_cpt = ref 0 in
       let recap = ref ["|      | Killed |   Not  |"] in
-      let () = Options.Self.feedback "%i mutants" (List.length !mutations) in
+      Options.Self.feedback "%i mutants" (List.length !mutations);
       let rec mutate cpt = function
 	| [] -> ()
 	| h::t ->
+	  Options.Self.feedback "mutant %i %s" cpt (mutation_to_string h);
 	  let prj4 =
 	    File.create_project_from_visitor ("__mut"^(string_of_int cpt))
 	      (fun p -> new mutation_visitor p h funcname) in
-	  let () = Project.copy ~selection:(Plugin.get_selection()) prj4 in
-	  let () = Project.on prj4 (fun () ->
-	    let () = Options.Self.feedback "mutant %i" cpt in
-	    let () = Globals.set_entry_point funcname false in
+	  Options.Self.feedback "1...";
+	  Project.copy ~selection:(Plugin.get_selection()) prj4;
+if cpt = 95 then begin
+	  Project.on prj4 (fun () ->
+	    Globals.set_entry_point funcname false;
 	    let filename = "mutant_"^(string_of_int cpt)^".c" in
 	    let chan = open_out filename in
 	    let fmt = Format.formatter_of_out_channel chan in
-	    let () = File.pretty_ast ~fmt () in
-	    let () = flush chan in
-	    let () = close_out chan in
-(*
-	    let pc_options = "-pc-no-xml -pc-no-drivers" in
+	    File.pretty_ast ~fmt ();
+	    flush chan;
+	    close_out chan;
+	    Options.Self.feedback "2...";
+
 	    let werror = "-werror -werror-no-unknown -werror-no-external" in
-            let val = "-val -val-verbose 0" in
+            let value = "-val -value-verbose 0" in
             let rte = "-rte" in
 	    let cmd =
 	      Printf.sprintf
-		"frama-c %s -main %s -no-unicode %s %s -then -prepc %s -then %s"
-		filename funcname val rte pc_options werror in
+		"frama-c %s -main %s -no-unicode %s %s -then -pcva -then %s"
+		filename funcname value rte werror in
 	    let ret = Sys.command cmd in
-*)
-	    let () = !Db.RteGen.compute() in
-	    let () = !Db.Value.compute() in
-	    let () = run_pcva () in
+	    let ret = (ret = 0) in
+
+(*
+	    !Db.RteGen.compute();
+	    !Db.Value.compute();
+	    run_pcva ();
 	    let ret = Property_status.fold (fun prop b ->
 	      b && match Property_status.get prop with
 	      | Property_status.Best (Property_status.False_and_reachable,_) ->
 		false
 	      | _ -> true ) true
 	    in
+*)
 
 	    let str = Printf.sprintf "| %4i |   %c    |   %c    | %s" cpt
 	      (if ret then ' ' else 'X')
@@ -259,20 +268,24 @@ let run() =
 	    in
 	    recap := "--------------------------" :: str :: !recap;
 	    if not ret then
-	      let () = killed_mutants_cpt := !killed_mutants_cpt +1 in
-	      trace :=
-		(Printf.sprintf "%s (%s)"
-		   (mutation_to_string h) filename) :: !trace
-	  ) () in
-	  let () = Project.remove ~project:prj4 () in
-	  let () = all_mutants_cpt := !all_mutants_cpt + 1 in
+	      begin
+		killed_mutants_cpt := !killed_mutants_cpt +1;
+		trace :=
+		  (Printf.sprintf "%s (%s)"
+		     (mutation_to_string h) filename) :: !trace
+	      end
+	  ) ();
+end ;
+
+	  Project.remove ~project:prj4 ();
+	  all_mutants_cpt := !all_mutants_cpt + 1;
 	  mutate (cpt+1) t in
-      let () = mutate 0 (List.rev !mutations) in
-      let () = List.iter (fun s -> Options.Self.debug ~level:2 "%s" s) !trace in
+      mutate 0 (List.rev !mutations);
+      List.iter (fun s -> Options.Self.debug ~level:2 "%s" s) !trace;
       let recap = List.rev !recap in
-      let () = List.iter (fun s -> Options.Self.feedback "%s" s) recap in
-      let () = Options.Self.result "%i mutants" !all_mutants_cpt in
-      let () = Options.Self.result "%i mutants killed" !killed_mutants_cpt in
+      List.iter (fun s -> Options.Self.feedback "%s" s) recap;
+      Options.Self.result "%i mutants" !all_mutants_cpt;
+      Options.Self.result "%i mutants killed" !killed_mutants_cpt;
       mutations := []
 	
 	
