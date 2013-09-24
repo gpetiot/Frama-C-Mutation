@@ -226,9 +226,8 @@ let run() =
 	  let prj4 =
 	    File.create_project_from_visitor ("__mut"^(string_of_int cpt))
 	      (fun p -> new mutation_visitor p h funcname) in
-	  Options.Self.feedback "1...";
 	  Project.copy ~selection:(Plugin.get_selection()) prj4;
-if cpt = 95 then begin
+(*if cpt = 95 then begin*)
 	  Project.on prj4 (fun () ->
 	    Globals.set_entry_point funcname false;
 	    let filename = "mutant_"^(string_of_int cpt)^".c" in
@@ -237,7 +236,6 @@ if cpt = 95 then begin
 	    File.pretty_ast ~fmt ();
 	    flush chan;
 	    close_out chan;
-	    Options.Self.feedback "2...";
 
 	    let werror = "-werror -werror-no-unknown -werror-no-external" in
             let value = "-val -value-verbose 0" in
@@ -275,7 +273,7 @@ if cpt = 95 then begin
 		     (mutation_to_string h) filename) :: !trace
 	      end
 	  ) ();
-end ;
+(*end ;*)
 
 	  Project.remove ~project:prj4 ();
 	  all_mutants_cpt := !all_mutants_cpt + 1;
