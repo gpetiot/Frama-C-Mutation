@@ -188,11 +188,10 @@ class mutation_visitor prj mut name = object
       |(Instr(Call(_,{eloc=loc;enode=Lval(Var{vname="free"},_)},_,_)),Free(_,l))
 	  when same_locs loc l ->
 	mkStmtCfgBlock []
-      | If({enode=UnOp(LNot,e,_)},b1,b2,loc),Cond(_,_,l) when same_locs loc l ->
-	mkStmt(If(e,b1,b2,loc))
       | (If (e, b1, b2, loc), Cond (_, _, l)) when same_locs loc l ->
 	let new_e = new_exp loc (UnOp (LNot, e, intType)) in
-	mkStmt (If (new_e, b1, b2, loc))
+	let new_skind = If (new_e, b1, b2, loc) in
+	{s with skind = new_skind}
       | _ -> s
     in
     ChangeDoChildrenPost (stmt, f)
