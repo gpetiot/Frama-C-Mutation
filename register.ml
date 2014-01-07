@@ -100,11 +100,11 @@ class gather_mutations funcname = object(self)
 
   val blocks:(block Stack.t) = Stack.create()
 
-  method vblock block =
+  method! vblock block =
     let _ = Stack.push block blocks in
     ChangeDoChildrenPost (block, (fun b -> let _ = Stack.pop blocks in b))
 
-  method vexpr exp =
+  method! vexpr exp =
     let f e =
       let loc = e.eloc in
       let () = match e.enode with
@@ -135,7 +135,7 @@ class gather_mutations funcname = object(self)
 	| _ -> () in e
     in ChangeDoChildrenPost (exp, f)
 
-  method vstmt_aux stmt =
+  method! vstmt_aux stmt =
     if stmt.ghost then
       SkipChildren
     else
@@ -152,7 +152,7 @@ class gather_mutations funcname = object(self)
 	in s
       in ChangeDoChildrenPost (stmt, f)
 
-  method vglob_aux glob =
+  method! vglob_aux glob =
     match glob with
     | GFun (f,_) when f.svar.vname <> (funcname^"_precond") ->
       ChangeDoChildrenPost ([glob], (fun x -> x))
@@ -167,7 +167,7 @@ let same_locs l1 l2 =
 class mutation_visitor prj mut name = object
   inherit Visitor.frama_c_copy prj
 
-  method vexpr exp =
+  method! vexpr exp =
     let f e =
       let loc = e.eloc in
       match (e.enode, mut) with
@@ -182,7 +182,7 @@ class mutation_visitor prj mut name = object
     in
     ChangeDoChildrenPost (exp, f)
 
-  method vstmt_aux stmt =
+  method! vstmt_aux stmt =
     let f s =
       match (s.skind, mut) with
       |(Instr(Call(_,{eloc=loc;enode=Lval(Var{vname="free"},_)},_,_)),Free(_,l))
