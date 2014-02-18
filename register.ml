@@ -225,7 +225,7 @@ let run() =
 	  let prj4 =
 	    File.create_project_from_visitor ("__mut"^(string_of_int cpt))
 	      (fun p -> new mutation_visitor p h funcname) in
-	  Project.copy ~selection:(Plugin.get_selection()) prj4;
+	  Project.copy ~selection:(Parameter_state.get_selection()) prj4;
 (*if cpt = 95 then begin*)
 	  Project.on prj4 (fun () ->
 	    Globals.set_entry_point funcname false;
