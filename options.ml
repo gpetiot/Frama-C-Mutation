@@ -41,3 +41,10 @@ module Mutate_Free = Self.False (struct
   let option_name = "-mut-free"
   let help = "delete `free` calls"
 end)
+
+module Only = Self.Int (struct
+  let option_name = "-mut-only"
+  let help = "only perform a given mutation (designated by its number)"
+  let arg_name = "N"
+  let default = -1
+end)
