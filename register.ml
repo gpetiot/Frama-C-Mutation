@@ -238,27 +238,27 @@ let run() =
 	  File.pretty_ast ~fmt ();
 	  flush chan;
 	  close_out chan;
-	  let cmd =
-	    Printf.sprintf "frama-c %s -main %s -no-unicode \
--rte \
--then -stady \
--then -werror -werror-no-unknown -werror-no-external"
-	      filename funcname in
-	  let ret = (Sys.command cmd) = 0 in
+	  (* let cmd = *)
+(* 	    Printf.sprintf "frama-c %s -main %s -no-unicode \ *)
+(* -rte \ *)
+(* -then -stady \ *)
+(* -then -werror -werror-no-unknown -werror-no-external" *)
+(* 	      filename funcname in *)
+(* 	  let ret = (Sys.command cmd) = 0 in *)
 
-	  (*
-	    !Db.RteGen.compute();
-	    !Db.Value.compute();
-	    run_stady ();
-	    let ret = Property_status.fold (fun prop b ->
-	    b && match Property_status.get prop with
-	    | Property_status.Best (Property_status.False_and_reachable,_) ->
-	    false
-	    | _ -> true ) true
-	    in
-	  *)
+(* 	  (\* *)
+(* 	    !Db.RteGen.compute(); *)
+(* 	    !Db.Value.compute(); *)
+(* 	    run_stady (); *)
+(* 	    let ret = Property_status.fold (fun prop b -> *)
+(* 	    b && match Property_status.get prop with *)
+(* 	    | Property_status.Best (Property_status.False_and_reachable,_) -> *)
+(* 	    false *)
+(* 	    | _ -> true ) true *)
+(* 	    in *)
+(* 	  *\) *)
 
-	  ret
+	  true
 	) ()
 	in
 	if not ret then
