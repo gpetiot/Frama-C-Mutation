@@ -119,8 +119,7 @@ let rec mutate funcname cpt killed_mutants_cpt recap = function
     let dkey = Options.dkey_progress in
     Options.Self.feedback ~dkey "mutant %i %a" cpt pp_mutation h;
     let f p = new mutation_visitor p h funcname in
-    let p_name = "__mut" ^ (string_of_int cpt) in
-    let project = File.create_project_from_visitor p_name f in
+    let project = File.create_project_from_visitor "__mut_tmp" f in
     let cmd = Printf.sprintf "frama-c %s -main %s -no-unicode \
 -rte -then -stady -then -werror -werror-no-unknown -werror-no-external"
       filename funcname in
