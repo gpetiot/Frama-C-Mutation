@@ -1,5 +1,4 @@
 
-
 module Self = Plugin.Register (struct
   let name = "Mutation"
   let shortname = "mut"
@@ -11,7 +10,7 @@ module Enabled = Self.False (struct
   let help = ""
 end)
 
-(* customization *)
+(* Customization *)
 
 module Mutate_Int_Arith = Self.True (struct
   let option_name = "-mut-int-arith"
@@ -40,3 +39,8 @@ module Only = Self.Int (struct
   let arg_name = "N"
   let default = -1
 end)
+
+(* Debug Keys *)
+
+let dkey_progress = Self.register_category "progress"
+let dkey_report = Self.register_category "report"

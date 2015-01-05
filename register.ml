@@ -116,7 +116,8 @@ let rec mutate funcname cpt killed_mutants_cpt recap = function
     mutate funcname (cpt+1) killed_mutants_cpt recap t
   | h::t ->
     let filename = "mutant_" ^ (string_of_int cpt) ^ ".c" in
-    Options.Self.feedback "mutant %i %a" cpt pp_mutation h;
+    let dkey = Options.dkey_progress in
+    Options.Self.feedback ~dkey "mutant %i %a" cpt pp_mutation h;
     let f p = new mutation_visitor p h funcname in
     let p_name = "__mut" ^ (string_of_int cpt) in
     let project = File.create_project_from_visitor p_name f in
@@ -134,7 +135,6 @@ let rec mutate funcname cpt killed_mutants_cpt recap = function
     Project.on project print_in_file ();
     let ret = (Sys.command cmd) = 0 in
     let k_m_cpt = if ret then killed_mutants_cpt else killed_mutants_cpt + 1 in
-    Options.Self.debug ~level:2 "%a (%s)" pp_mutation h filename;
     Project.remove ~project ();
     mutate funcname (cpt+1) k_m_cpt ((cpt, ret, h) :: recap) t
 
@@ -145,16 +145,18 @@ let run() =
     let g = new gatherer funcname in
     Visitor.visitFramacFile (g :> Visitor.frama_c_inplace) (Ast.get());
     let mutations = g#get_mutations() in
-    Options.Self.feedback "%i mutants" (List.length mutations);
+    let n_mutations = List.length mutations in
+    Options.Self.feedback ~dkey:Options.dkey_progress "%i mutants" n_mutations;
     let killed_mutants_cpt, recap = mutate funcname 0 0 [] mutations in
-    Options.Self.feedback "|      | Killed |   Not  |";
+    let dkey = Options.dkey_report in
+    Options.Self.result ~dkey "|      | Killed |   Not  |";
     List.iter (fun (i,r,m) ->
-      Options.Self.feedback "| %4i |   %c    |   %c    | %a"
+      Options.Self.result ~dkey "| %4i |   %c    |   %c    | %a"
 	i (if r then ' ' else 'X') (if r then 'X' else ' ') pp_mutation m;
-      Options.Self.feedback "--------------------------"
+      Options.Self.result ~dkey "--------------------------"
     ) recap;
-    Options.Self.result "%i mutants" (List.length mutations);
-    Options.Self.result "%i mutants killed" killed_mutants_cpt
+    Options.Self.result ~dkey "%i mutants" n_mutations;
+    Options.Self.result ~dkey "%i mutants killed" killed_mutants_cpt
 	
 	
 let run =
