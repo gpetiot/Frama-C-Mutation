@@ -3,11 +3,15 @@ open Cil_types
 
 
 type mutation =
+  (* mutations on code *)
   | Mut_BinOp of binop * binop * location
   | Mut_If of exp * exp * location
+  (* mutations on spec *)
+  | Mut_TBinOp of binop * binop * location
 
 
 let pp_mutation fmt = function
+  | Mut_TBinOp(b1,b2,loc)
   | Mut_BinOp(b1,b2,loc) -> Format.fprintf fmt "%a: (%a) --> (%a)"
     Printer.pp_location loc
     Printer.pp_binop b1
@@ -37,6 +41,10 @@ let other_binops = function
   | _ -> assert false
 
 
+let loc_ok (loc,_) =
+  Filename.basename loc.Lexing.pos_fname <> "__fc_builtin_for_normalization.i"
+
+
 class gatherer funcname = object(self)
   inherit Visitor.frama_c_inplace
 
@@ -44,6 +52,15 @@ class gatherer funcname = object(self)
 
   method get_mutations() = mutations
   method private add m = mutations <- m :: mutations
+
+  method! vterm t = match t.term_node with
+  | TBinOp((PlusA|MinusA|Mult|Div|Mod|PlusPI|IndexPI|MinusPI|LAnd|LOr|Lt|Gt|Le
+	      |Ge|Eq|Ne) as op, _, _)
+      when Options.Mut_Spec.get() && loc_ok t.term_loc ->
+    let add o = self#add (Mut_TBinOp (op, o, t.term_loc)) in
+    List.iter add (other_binops op);
+    Cil.DoChildren
+  | _ -> Cil.DoChildren
 
   method! vexpr exp = match exp.enode with
   | BinOp((PlusA|MinusA|Mult|Div|Mod|PlusPI|IndexPI|MinusPI|LAnd|LOr|Lt|Gt|Le
@@ -71,6 +88,12 @@ let same_locs l1 l2 = (Cil_datatype.Location.compare l1 l2) = 0
 
 class mutation_visitor prj mut name = object
   inherit Visitor.frama_c_copy prj
+
+  method! vterm term = match (term.term_node, mut) with
+  | TBinOp(o,x,y), Mut_TBinOp(w,z,l) when same_locs term.term_loc l && o = w->
+    Cil.ChangeDoChildrenPost
+      (term, fun t -> Logic_const.term (TBinOp(z,x,y)) t.term_type)
+  | _ -> Cil.DoChildren
 
   method! vexpr exp = match (exp.enode, mut) with
   | BinOp (o1,x,y,t), Mut_BinOp (o2,z,l) when same_locs exp.eloc l && o1 = o2 ->
