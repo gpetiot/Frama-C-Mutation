@@ -40,6 +40,13 @@ module Only = Self.Int (struct
   let default = -1
 end)
 
+module Apply_to_Mutant = Self.String (struct
+  let option_name = "-mut-apply"
+  let help = "plugin(s) to apply to mutants"
+  let arg_name = "str"
+  let default = "-rte -then -stady"
+end)
+
 (* Debug Keys *)
 
 let dkey_progress = Self.register_category "progress"

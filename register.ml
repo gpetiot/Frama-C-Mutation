@@ -121,8 +121,8 @@ let rec mutate funcname cpt killed_mutants_cpt recap = function
     let f p = new mutation_visitor p h funcname in
     let project = File.create_project_from_visitor "__mut_tmp" f in
     let cmd = Printf.sprintf "frama-c %s -main %s -no-unicode \
--rte -then -stady -then -werror -werror-no-unknown -werror-no-external"
-      filename funcname in
+%s -then -werror -werror-no-unknown -werror-no-external"
+      filename funcname (Options.Apply_to_Mutant.get()) in
     Project.copy ~selection:(Parameter_state.get_selection()) project;
     let print_in_file () =
       Globals.set_entry_point funcname false;
