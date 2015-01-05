@@ -124,21 +124,19 @@ class gatherer funcname = object(self)
     Cil.ChangeDoChildrenPost (exp, f)
 
   method! vstmt_aux stmt =
-    if stmt.ghost then Cil.SkipChildren
-    else
-      let f s =
-        begin match s.skind with
-	| Instr(Call(_, {eloc=loc;enode=Lval(Var{vname="free"}, _)}, _, _)) ->
-	  if Options.Mutate_Free.get() then self#add (Free(s,loc))
-	| If (exp, _b1, _b2, loc) ->
-	  if Options.Mutate_Cond.get() then
-	    let new_bool = Cil.new_exp loc (UnOp (LNot, exp, Cil.intType)) in
-	    self#add (Cond(exp, new_bool, loc))
-	| _ -> ()
-	end;
-	s
-      in
-      Cil.ChangeDoChildrenPost (stmt, f)
+    let f s =
+      begin match s.skind with
+      | Instr(Call(_, {eloc=loc;enode=Lval(Var{vname="free"}, _)}, _, _)) ->
+	if Options.Mutate_Free.get() then self#add (Free(s,loc))
+      | If (exp, _b1, _b2, loc) ->
+	if Options.Mutate_Cond.get() then
+	  let new_bool = Cil.new_exp loc (UnOp (LNot, exp, Cil.intType)) in
+	  self#add (Cond(exp, new_bool, loc))
+      | _ -> ()
+      end;
+      s
+    in
+    Cil.ChangeDoChildrenPost (stmt, f)
 
   method! vglob_aux glob = match glob with
   | GFun (f,_) when f.svar.vname <> (funcname ^ "_precond") ->
