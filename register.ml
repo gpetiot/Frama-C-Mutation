@@ -180,10 +180,9 @@ end
 let run() =
   if Options.Enabled.get() then
     let funcname = Kernel_function.get_name (fst (Globals.entry_point())) in
-    let mutation_gatherer = new gatherer funcname in
-    Visitor.visitFramacFile
-      (mutation_gatherer :> Visitor.frama_c_inplace) (Ast.get());
-    let mutations = mutation_gatherer#get_mutations() in
+    let g = new gatherer funcname in
+    Visitor.visitFramacFile (g :> Visitor.frama_c_inplace) (Ast.get());
+    let mutations = g#get_mutations() in
     let killed_mutants_cpt = ref 0 in
     Options.Self.feedback "%i mutants" (List.length mutations);
     let rec mutate cpt recap = function
