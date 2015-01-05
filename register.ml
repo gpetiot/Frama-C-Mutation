@@ -42,13 +42,6 @@ let other_binops = function
   | Ne -> [Eq]
   | _ -> assert false
 
-let option_of_binop = function
-  | PlusA | MinusA | Mult | Div | Mod -> Options.Mutate_Int_Arith.get()
-  | PlusPI | IndexPI | MinusPI -> Options.Mutate_Ptr_Arith.get()
-  | LAnd | LOr -> Options.Mutate_Logic_And_Or.get()
-  | Lt | Gt | Le | Ge | Eq | Ne -> Options.Mutate_Comp.get()
-  | _ -> assert false
-
 let binop_mutation op1 op2 loc = match op1 with
   | PlusA | MinusA | Mult | Div | Mod -> Int_Arith(op1,op2,loc)
   | PlusPI | IndexPI | MinusPI -> Ptr_Arith(op1,op2,loc)
@@ -67,14 +60,14 @@ class gatherer funcname = object(self)
 
   method! vexpr exp = match exp.enode with
   | BinOp((PlusA|MinusA|Mult|Div|Mod|PlusPI|IndexPI|MinusPI|LAnd|LOr|Lt|Gt|Le
-	      |Ge|Eq|Ne) as op, _, _, _) when option_of_binop op ->
+	      |Ge|Eq|Ne) as op, _, _, _) when Options.Mut_Code.get() ->
     let add o = self#add (binop_mutation op o exp.eloc) in
     List.iter add (other_binops op);
     Cil.DoChildren
   | _ -> Cil.DoChildren
 
   method! vstmt_aux stmt = match stmt.skind with
-  | If (exp, _, _, loc) when Options.Mutate_Cond.get() ->
+  | If (exp, _, _, loc) when Options.Mut_Code.get() ->
     let new_bool = Cil.new_exp loc (UnOp (LNot, exp, Cil.intType)) in
     self#add (Cond(exp, new_bool, loc));
     Cil.DoChildren

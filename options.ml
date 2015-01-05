@@ -12,25 +12,9 @@ end)
 
 (* Customization *)
 
-module Mutate_Int_Arith = Self.True (struct
-  let option_name = "-mut-int-arith"
-  let help = "mutate arithmetical operations over intergers"
-end)
-module Mutate_Ptr_Arith = Self.True (struct
-  let option_name = "-mut-ptr-arith"
-  let help = "mutate arithmetical operations over pointers"
-end)
-module Mutate_Logic_And_Or = Self.True (struct
-  let option_name = "-mut-logic-and-or"
-  let help = "mutate logic operations"
-end)
-module Mutate_Comp = Self.True (struct
-  let option_name = "-mut-comp"
-  let help = "mutate comparison operations"
-end)
-module Mutate_Cond = Self.True (struct
-  let option_name = "-mut-cond"
-  let help = "negate conditions"
+module Mut_Code = Self.True (struct
+  let option_name = "-mut-code"
+  let help = "perform mutations on the C code"
 end)
 
 module Only = Self.Int (struct
