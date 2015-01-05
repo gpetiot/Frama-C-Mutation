@@ -10,21 +10,14 @@ type mutation =
   | Mut_TBinOp of binop * binop * location
   | Mut_Prel of relation * relation * location
 
+let pp_aux fmt f e1 e2 loc =
+  Format.fprintf fmt "%a: `%a` --> `%a`" Printer.pp_location loc f e1 f e2
 
 let pp_mutation fmt = function
   | Mut_TBinOp(b1,b2,loc)
-  | Mut_BinOp(b1,b2,loc) -> Format.fprintf fmt "%a: (%a) --> (%a)"
-    Printer.pp_location loc
-    Printer.pp_binop b1
-    Printer.pp_binop b2
-  | Mut_If(e1,e2,loc) -> Format.fprintf fmt "%a: %a --> %a"
-    Printer.pp_location loc
-    Printer.pp_exp e1
-    Printer.pp_exp e2
-  | Mut_Prel(r1,r2,loc) -> Format.fprintf fmt "%a: (%a) --> (%a)"
-    Printer.pp_location loc
-    Printer.pp_relation r1
-    Printer.pp_relation r2
+  | Mut_BinOp(b1,b2,loc) -> pp_aux fmt Printer.pp_binop b1 b2 loc
+  | Mut_If(e1,e2,loc) -> pp_aux fmt Printer.pp_exp e1 e2 loc
+  | Mut_Prel(r1,r2,loc) -> pp_aux fmt Printer.pp_relation r1 r2 loc
 
 
 let other_binops = function
@@ -115,7 +108,7 @@ class mutation_visitor prj mut name = object
   | _ -> Cil.DoChildren
 
   method! vterm term = match term.term_node, mut with
-  | TBinOp(o,x,y), Mut_TBinOp(w,z,l) when same_locs term.term_loc l && o = w->
+  | TBinOp(o,x,y), Mut_TBinOp(w,z,l) when same_locs term.term_loc l && o = w ->
     Cil.ChangeDoChildrenPost
       (term, fun t -> Logic_const.term (TBinOp(z,x,y)) t.term_type)
   | _ -> Cil.DoChildren
