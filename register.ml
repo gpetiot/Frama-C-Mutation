@@ -127,10 +127,21 @@ let rec mutate funcname cpt killed_mutants_cpt recap = function
     Project.copy ~selection:(Parameter_state.get_selection()) project;
     let print_in_file () =
       Globals.set_entry_point funcname false;
-      let chan = open_out filename in
-      File.pretty_ast ~fmt:(Format.formatter_of_out_channel chan) ();
-      flush chan;
-      close_out chan
+      Kernel.Unicode.set false;
+      let buf = Buffer.create 512 in
+      let fmt = Format.formatter_of_buffer buf in
+      File.pretty_ast ~fmt ();
+      let out_file = open_out filename in
+      Options.Self.feedback ~dkey:Options.dkey_mutant "mutant %i:" cpt;
+      let dkeys = Options.Self.Debug_category.get() in
+      if Datatype.String.Set.mem "mutant" dkeys then
+	Buffer.output_buffer stdout buf;
+      Buffer.output_buffer out_file buf;
+      Format.pp_print_flush fmt ();
+      flush stdout;
+      flush out_file;
+      close_out out_file;
+      Buffer.clear buf
     in
     Project.on project print_in_file ();
     let ret = (Sys.command cmd) = 0 in

@@ -44,3 +44,4 @@ end)
 
 let dkey_progress = Self.register_category "progress"
 let dkey_report = Self.register_category "report"
+let dkey_mutant = Self.register_category "mutant"
