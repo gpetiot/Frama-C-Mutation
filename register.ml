@@ -11,6 +11,7 @@ type mutation =
   | Mut_Prel of relation * relation * location
   | Mut_Pnot of predicate named * predicate named * location
   | Mut_Assigns of identified_term
+  | Mut_LoopInv of predicate named
 
 let pp_aux fmt f e1 e2 loc =
   Format.fprintf fmt "%a: `%a` --> `%a`" Printer.pp_location loc f e1 f e2
@@ -23,6 +24,8 @@ let pp_mutation fmt = function
   | Mut_Pnot(p1,p2,loc) -> pp_aux fmt Printer.pp_predicate_named p1 p2 loc
   | Mut_Assigns t -> Format.fprintf fmt "%a: - assigns %a"
     Printer.pp_location t.it_content.term_loc Printer.pp_identified_term t
+  | Mut_LoopInv p -> Format.fprintf fmt "%a: - loop invariant %a"
+    Printer.pp_location p.loc Printer.pp_predicate_named p
 
 
 let other_binops = function
@@ -63,6 +66,12 @@ class gatherer funcname = object(self)
 
   method get_mutations() = mutations
   method private add m = mutations <- m :: mutations
+
+  method! vcode_annot ca = match ca.annot_content with
+  | AInvariant(_,linv,p) when linv && loc_ok p.loc ->
+    self#add (Mut_LoopInv p);
+    Cil.DoChildren
+  | _ -> Cil.DoChildren
 
   method! vassigns = function
   | Writes ((h,_)::_ as t)
@@ -116,6 +125,12 @@ let same_locs l1 l2 = (Cil_datatype.Location.compare l1 l2) = 0
 
 class mutation_visitor prj mut name = object
   inherit Visitor.frama_c_copy prj
+
+  method! vcode_annot ca = match ca.annot_content, mut with
+  | AInvariant(_,linv,p), Mut_LoopInv m when linv && same_locs p.loc m.loc ->
+    let ca2 = AInvariant([],true,Logic_const.ptrue) in
+    Cil.ChangeDoChildrenPost (ca, fun _ -> Logic_const.new_code_annotation ca2)
+  | _ -> Cil.DoChildren
 
   method! vassigns a = match a, mut with
   | Writes t, Mut_Assigns m ->
