@@ -17,6 +17,11 @@ module Mut_Code = Self.True (struct
   let help = "perform mutations on the C code"
 end)
 
+module Mut_Spec = Self.False (struct
+  let option_name = "-mut-spec"
+  let help = "perform mutations on the ACSL specification"
+end)
+
 module Only = Self.Int (struct
   let option_name = "-mut-only"
   let help = "only perform a given mutation (designated by its number)"
