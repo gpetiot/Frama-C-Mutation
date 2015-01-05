@@ -114,44 +114,45 @@ class mutation_visitor prj mut name = object
 end
 
 
+let rec mutate funcname cpt killed_mutants_cpt recap = function
+  | [] -> killed_mutants_cpt, recap
+  | _ when Options.Only.get() <> -1 && Options.Only.get() < cpt ->
+    killed_mutants_cpt, recap
+  | _::t when Options.Only.get() <> -1 && Options.Only.get() > cpt ->
+    mutate funcname (cpt+1) killed_mutants_cpt recap t
+  | h::t ->
+    let filename = "mutant_" ^ (string_of_int cpt) ^ ".c" in
+    Options.Self.feedback "mutant %i %a" cpt pp_mutation h;
+    let f p = new mutation_visitor p h funcname in
+    let p_name = "__mut" ^ (string_of_int cpt) in
+    let project = File.create_project_from_visitor p_name f in
+    let cmd = Printf.sprintf "frama-c %s -main %s -no-unicode \
+-rte -then -stady -then -werror -werror-no-unknown -werror-no-external"
+      filename funcname in
+    Project.copy ~selection:(Parameter_state.get_selection()) project;
+    let ret = Project.on project (fun () ->
+      Globals.set_entry_point funcname false;
+      let chan = open_out filename in
+      File.pretty_ast ~fmt:(Format.formatter_of_out_channel chan) ();
+      flush chan;
+      close_out chan;
+      (Sys.command cmd) = 0
+    ) ()
+    in
+    let k_m_cpt = if ret then killed_mutants_cpt else killed_mutants_cpt + 1 in
+    Options.Self.debug ~level:2 "%a (%s)" pp_mutation h filename;
+    Project.remove ~project ();
+    mutate funcname (cpt+1) k_m_cpt ((cpt, ret, h) :: recap) t
+
+
 let run() =
   if Options.Enabled.get() then
     let funcname = Kernel_function.get_name (fst (Globals.entry_point())) in
     let g = new gatherer funcname in
     Visitor.visitFramacFile (g :> Visitor.frama_c_inplace) (Ast.get());
     let mutations = g#get_mutations() in
-    let killed_mutants_cpt = ref 0 in
     Options.Self.feedback "%i mutants" (List.length mutations);
-    let rec mutate cpt recap = function
-      | [] -> recap
-      | _ when Options.Only.get() <> -1 && Options.Only.get() < cpt -> recap
-      | _::t when Options.Only.get() <> -1 && Options.Only.get() > cpt ->
-	mutate (cpt+1) recap t
-      | h::t ->
-	let filename = "mutant_"^(string_of_int cpt)^".c" in
-	Options.Self.feedback "mutant %i %a" cpt pp_mutation h;
-	let f p = new mutation_visitor p h funcname in
-	let p_name = "__mut" ^ (string_of_int cpt) in
-	let project = File.create_project_from_visitor p_name f in
-	let cmd = Printf.sprintf "frama-c %s -main %s -no-unicode \
--rte -then -stady -then -werror -werror-no-unknown -werror-no-external"
-	  filename funcname in
-	Project.copy ~selection:(Parameter_state.get_selection()) project;
-	let ret = Project.on project (fun () ->
-	  Globals.set_entry_point funcname false;
-	  let chan = open_out filename in
-	  File.pretty_ast ~fmt:(Format.formatter_of_out_channel chan) ();
-	  flush chan;
-	  close_out chan;
-	  (Sys.command cmd) = 0
-	) ()
-	in
-	if not ret then killed_mutants_cpt := !killed_mutants_cpt +1;
-	Options.Self.debug ~level:2 "%a (%s)" pp_mutation h filename;
-	Project.remove ~project ();
-	mutate (cpt+1) ((cpt, ret, h) :: recap) t
-    in
-    let recap = mutate 0 [] mutations in
+    let killed_mutants_cpt, recap = mutate funcname 0 0 [] mutations in
     Options.Self.feedback "|      | Killed |   Not  |";
     List.iter (fun (i,r,m) ->
       Options.Self.feedback "| %4i |   %c    |   %c    | %a"
@@ -159,7 +160,7 @@ let run() =
       Options.Self.feedback "--------------------------"
     ) recap;
     Options.Self.result "%i mutants" (List.length mutations);
-    Options.Self.result "%i mutants killed" !killed_mutants_cpt
+    Options.Self.result "%i mutants killed" killed_mutants_cpt
 	
 	
 let run =
