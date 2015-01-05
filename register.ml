@@ -42,21 +42,21 @@ let other_binops = function
   | Ge -> [Lt;Le;Eq;Ne;Gt]
   | Eq -> [Ne]
   | Ne -> [Eq]
-  | _ -> failwith "other_binops"
+  | _ -> assert false
 
 let option_of_binop = function
   | PlusA | MinusA | Mult | Div | Mod -> Options.Mutate_Int_Arith.get()
   | PlusPI | IndexPI | MinusPI -> Options.Mutate_Ptr_Arith.get()
   | LAnd | LOr -> Options.Mutate_Logic_And_Or.get()
   | Lt | Gt | Le | Ge | Eq | Ne -> Options.Mutate_Comp.get()
-  | _ -> failwith "option_of_binop"
+  | _ -> assert false
 
 let binop_mutation op1 op2 loc = match op1 with
   | PlusA | MinusA | Mult | Div | Mod -> Int_Arith(op1,op2,loc)
   | PlusPI | IndexPI | MinusPI -> Ptr_Arith(op1,op2,loc)
   | LAnd | LOr -> Logic_And_Or(op1,op2,loc)
   | Lt | Gt | Le | Ge | Eq | Ne -> Comp(op1,op2,loc)
-  | _ -> failwith "constr_binop"
+  | _ -> assert false
 
 
 class gatherer funcname = object(self)
@@ -67,41 +67,24 @@ class gatherer funcname = object(self)
   method get_mutations() = mutations
   method private add m = mutations <- m :: mutations
 
-  method! vexpr exp =
-    let f e =
-      let loc = e.eloc in
-      begin match e.enode with
-      | BinOp (op, _, _, _) ->
-	begin
-	  try
-	    if option_of_binop op then
-	      let add o = self#add (binop_mutation op o loc) in
-	      List.iter add (other_binops op)
-	  with _ -> ()
-	end
-      | _ -> ()
-      end;
-      e
-    in
-    Cil.ChangeDoChildrenPost (exp, f)
+  method! vexpr exp = match exp.enode with
+  | BinOp((PlusA|MinusA|Mult|Div|Mod|PlusPI|IndexPI|MinusPI|LAnd|LOr|Lt|Gt|Le
+	      |Ge|Eq|Ne) as op, _, _, _) when option_of_binop op ->
+    let add o = self#add (binop_mutation op o exp.eloc) in
+    List.iter add (other_binops op);
+    Cil.ChangeDoChildrenPost (exp, fun x -> x)
+  | _ -> Cil.ChangeDoChildrenPost (exp, fun x -> x)
 
-  method! vstmt_aux stmt =
-    let f s =
-      begin match s.skind with
-      | If (exp, _b1, _b2, loc) ->
-	if Options.Mutate_Cond.get() then
-	  let new_bool = Cil.new_exp loc (UnOp (LNot, exp, Cil.intType)) in
-	  self#add (Cond(exp, new_bool, loc))
-      | _ -> ()
-      end;
-      s
-    in
-    Cil.ChangeDoChildrenPost (stmt, f)
+  method! vstmt_aux stmt = match stmt.skind with
+  | If (exp, _b1, _b2, loc) when Options.Mutate_Cond.get() ->
+    let new_bool = Cil.new_exp loc (UnOp (LNot, exp, Cil.intType)) in
+    self#add (Cond(exp, new_bool, loc));
+    Cil.ChangeDoChildrenPost (stmt, fun x -> x)
+  | _ -> Cil.ChangeDoChildrenPost (stmt, fun x -> x)
 
   method! vglob_aux glob = match glob with
-  | GFun (f,_) when f.svar.vname <> (funcname ^ "_precond") ->
-    Cil.ChangeDoChildrenPost ([glob], (fun x -> x))
-  | _ -> Cil.SkipChildren
+  | GFun (f,_) when f.svar.vname = (funcname ^ "_precond") -> Cil.SkipChildren
+  | _ -> Cil.ChangeDoChildrenPost ([glob], (fun x -> x))
 end
 
 
