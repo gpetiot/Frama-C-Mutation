@@ -7,3 +7,6 @@ PLUGIN_TESTS_DIRS := search
 
 PLUGIN_CMO	:= options register
 include $(FRAMAC_SHARE)/Makefile.dynamic
+
+clean::
+	$(RM) mutant_*.c
