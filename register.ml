@@ -93,10 +93,10 @@ class mutation_visitor prj mut name = object
   inherit Visitor.frama_c_copy prj
 
   method! vexpr exp = match (exp.enode, mut) with
-  | BinOp (_, x, y, t), Int_Arith (_, z, l)
-  | BinOp (_, x, y, t), Ptr_Arith (_, z, l)
-  | BinOp (_, x, y, t), Logic_And_Or (_, z, l)
-  | BinOp (_, x, y, t), Comp (_, z, l) when same_locs exp.eloc l ->
+  | BinOp (o1, x, y, t), Int_Arith (o2, z, l)
+  | BinOp (o1, x, y, t), Ptr_Arith (o2, z, l)
+  | BinOp (o1, x, y, t), Logic_And_Or (o2, z, l)
+  | BinOp (o1, x, y, t), Comp (o2, z, l) when same_locs exp.eloc l && o1 = o2 ->
     Cil.ChangeDoChildrenPost (exp, fun e -> Cil.new_exp e.eloc (BinOp(z,x,y,t)))
   | _ -> Cil.DoChildren
 
