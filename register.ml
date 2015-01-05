@@ -92,25 +92,19 @@ let same_locs l1 l2 = (Cil_datatype.Location.compare l1 l2) = 0
 class mutation_visitor prj mut name = object
   inherit Visitor.frama_c_copy prj
 
-  method! vexpr exp =
-    let f e = match (e.enode, mut) with
-      | BinOp (_, e1, e2, ty), Int_Arith (_, b2, l)
-      | BinOp (_, e1, e2, ty), Ptr_Arith (_, b2, l)
-      | BinOp (_, e1, e2, ty), Logic_And_Or (_, b2, l)
-      | BinOp (_, e1, e2, ty), Comp (_, b2, l) when same_locs e.eloc l ->
-	Cil.new_exp e.eloc (BinOp (b2, e1, e2, ty))
-      | _ -> e
-    in
-    Cil.ChangeDoChildrenPost (exp, f)
+  method! vexpr exp = match (exp.enode, mut) with
+  | BinOp (_, x, y, t), Int_Arith (_, z, l)
+  | BinOp (_, x, y, t), Ptr_Arith (_, z, l)
+  | BinOp (_, x, y, t), Logic_And_Or (_, z, l)
+  | BinOp (_, x, y, t), Comp (_, z, l) when same_locs exp.eloc l ->
+    Cil.ChangeDoChildrenPost (exp, fun e -> Cil.new_exp e.eloc (BinOp(z,x,y,t)))
+  | _ -> Cil.DoChildren
 
-  method! vstmt_aux stmt =
-    let f s = match (s.skind, mut) with
-      | (If (e, b1, b2, loc), Cond (_, _, l)) when same_locs loc l ->
-	let new_e = Cil.new_exp loc (UnOp (LNot, e, Cil.intType)) in
-	{s with skind = If (new_e, b1, b2, loc)}
-      | _ -> s
-    in
-    Cil.ChangeDoChildrenPost (stmt, f)
+  method! vstmt_aux stmt = match (stmt.skind, mut) with
+  | (If (e, x, y, loc), Cond (_, _, l)) when same_locs loc l ->
+    let e = Cil.new_exp loc (UnOp (LNot, e, Cil.intType)) in
+    Cil.ChangeDoChildrenPost (stmt, fun s -> {s with skind = If (e, x, y, loc)})
+  | _ -> Cil.DoChildren
 end
 
 
