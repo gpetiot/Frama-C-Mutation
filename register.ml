@@ -9,6 +9,7 @@ type mutation =
   (* mutations on spec *)
   | Mut_TBinOp of binop * binop * location
   | Mut_Prel of relation * relation * location
+  | Mut_Pnot of predicate named * predicate named * location
 
 let pp_aux fmt f e1 e2 loc =
   Format.fprintf fmt "%a: `%a` --> `%a`" Printer.pp_location loc f e1 f e2
@@ -18,6 +19,7 @@ let pp_mutation fmt = function
   | Mut_BinOp(b1,b2,loc) -> pp_aux fmt Printer.pp_binop b1 b2 loc
   | Mut_If(e1,e2,loc) -> pp_aux fmt Printer.pp_exp e1 e2 loc
   | Mut_Prel(r1,r2,loc) -> pp_aux fmt Printer.pp_relation r1 r2 loc
+  | Mut_Pnot(p1,p2,loc) -> pp_aux fmt Printer.pp_predicate_named p1 p2 loc
 
 
 let other_binops = function
@@ -64,6 +66,9 @@ class gatherer funcname = object(self)
     let add o = self#add (Mut_Prel (r, o, p.loc)) in
     List.iter add (other_relations r);
     Cil.DoChildren
+  | Pnot(p2) when Options.Mut_Spec.get() && loc_ok p.loc ->
+    self#add (Mut_Pnot (p, p2, p.loc));
+    Cil.DoChildren
   | _ -> Cil.DoChildren
 
   method! vterm t = match t.term_node with
@@ -105,6 +110,8 @@ class mutation_visitor prj mut name = object
   method! vpredicate_named p = match p.content, mut with
   | Prel(r,x,y), Mut_Prel(w,z,l) when same_locs p.loc l && r = w ->
     Cil.ChangeDoChildrenPost (p, fun _ -> Logic_const.prel (z,x,y))
+  | Pnot(_), Mut_Pnot(_,y,l) when same_locs p.loc l ->
+    Cil.ChangeDoChildrenPost (p, fun _ -> y)
   | _ -> Cil.DoChildren
 
   method! vterm term = match term.term_node, mut with
