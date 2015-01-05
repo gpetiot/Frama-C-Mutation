@@ -44,7 +44,7 @@ module Apply_to_Mutant = Self.String (struct
   let option_name = "-mut-apply"
   let help = "plugin(s) to apply to mutants"
   let arg_name = "str"
-  let default = "-rte -then -stady"
+  let default = ""
 end)
 
 (* Debug Keys *)

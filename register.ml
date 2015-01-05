@@ -120,9 +120,6 @@ let rec mutate funcname cpt killed_mutants_cpt recap = function
     Options.Self.feedback ~dkey "mutant %i %a" cpt pp_mutation h;
     let f p = new mutation_visitor p h funcname in
     let project = File.create_project_from_visitor "__mut_tmp" f in
-    let cmd = Printf.sprintf "frama-c %s -main %s -no-unicode \
-%s -then -werror -werror-no-unknown -werror-no-external"
-      filename funcname (Options.Apply_to_Mutant.get()) in
     Project.copy ~selection:(Parameter_state.get_selection()) project;
     let print_in_file () =
       Globals.set_entry_point funcname false;
@@ -143,7 +140,14 @@ let rec mutate funcname cpt killed_mutants_cpt recap = function
       Buffer.clear buf
     in
     Project.on project print_in_file ();
-    let ret = (Sys.command cmd) = 0 in
+    let ret = match Options.Apply_to_Mutant.get() with
+      | "" -> false
+      | plugins ->
+	let cmd = Printf.sprintf "frama-c %s -main %s -no-unicode \
+%s -then -werror -werror-no-unknown -werror-no-external"
+	  filename funcname plugins in
+	(Sys.command cmd) = 0
+    in
     let k_m_cpt = if ret then killed_mutants_cpt else killed_mutants_cpt + 1 in
     Project.remove ~project ();
     mutate funcname (cpt+1) k_m_cpt ((cpt, ret, h) :: recap) t
