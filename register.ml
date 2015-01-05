@@ -72,19 +72,19 @@ class gatherer funcname = object(self)
 	      |Ge|Eq|Ne) as op, _, _, _) when option_of_binop op ->
     let add o = self#add (binop_mutation op o exp.eloc) in
     List.iter add (other_binops op);
-    Cil.ChangeDoChildrenPost (exp, fun x -> x)
-  | _ -> Cil.ChangeDoChildrenPost (exp, fun x -> x)
+    Cil.DoChildren
+  | _ -> Cil.DoChildren
 
   method! vstmt_aux stmt = match stmt.skind with
-  | If (exp, _b1, _b2, loc) when Options.Mutate_Cond.get() ->
+  | If (exp, _, _, loc) when Options.Mutate_Cond.get() ->
     let new_bool = Cil.new_exp loc (UnOp (LNot, exp, Cil.intType)) in
     self#add (Cond(exp, new_bool, loc));
-    Cil.ChangeDoChildrenPost (stmt, fun x -> x)
-  | _ -> Cil.ChangeDoChildrenPost (stmt, fun x -> x)
+    Cil.DoChildren
+  | _ -> Cil.DoChildren
 
   method! vglob_aux glob = match glob with
   | GFun (f,_) when f.svar.vname = (funcname ^ "_precond") -> Cil.SkipChildren
-  | _ -> Cil.ChangeDoChildrenPost ([glob], (fun x -> x))
+  | _ -> Cil.DoChildren
 end
 
 
