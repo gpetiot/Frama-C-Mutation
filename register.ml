@@ -10,6 +10,7 @@ type mutation =
   | Mut_TBinOp of binop * binop * location
   | Mut_Prel of relation * relation * location
   | Mut_Pnot of predicate named * predicate named * location
+  | Mut_Assigns of identified_term
 
 let pp_aux fmt f e1 e2 loc =
   Format.fprintf fmt "%a: `%a` --> `%a`" Printer.pp_location loc f e1 f e2
@@ -20,6 +21,8 @@ let pp_mutation fmt = function
   | Mut_If(e1,e2,loc) -> pp_aux fmt Printer.pp_exp e1 e2 loc
   | Mut_Prel(r1,r2,loc) -> pp_aux fmt Printer.pp_relation r1 r2 loc
   | Mut_Pnot(p1,p2,loc) -> pp_aux fmt Printer.pp_predicate_named p1 p2 loc
+  | Mut_Assigns t -> Format.fprintf fmt "%a: - assigns %a"
+    Printer.pp_location t.it_content.term_loc Printer.pp_identified_term t
 
 
 let other_binops = function
@@ -60,6 +63,13 @@ class gatherer funcname = object(self)
 
   method get_mutations() = mutations
   method private add m = mutations <- m :: mutations
+
+  method! vassigns = function
+  | Writes ((h,_)::_ as t)
+      when Options.Mut_Spec.get() && t <> [] && loc_ok h.it_content.term_loc ->
+    List.iter (fun (x,_) -> self#add (Mut_Assigns x)) t;
+    Cil.SkipChildren
+  | _ -> Cil.SkipChildren
 
   method! vpredicate_named p = match p.content with
   | Prel(r,_,_) when Options.Mut_Spec.get() && loc_ok p.loc ->
@@ -106,6 +116,12 @@ let same_locs l1 l2 = (Cil_datatype.Location.compare l1 l2) = 0
 
 class mutation_visitor prj mut name = object
   inherit Visitor.frama_c_copy prj
+
+  method! vassigns a = match a, mut with
+  | Writes t, Mut_Assigns m ->
+    let t2 = List.filter (fun (x,_) -> x.it_id <> m.it_id) t in
+    Cil.ChangeDoChildrenPost (a, fun _ -> Writes t2)
+  | _ -> Cil.DoChildren
 
   method! vpredicate_named p = match p.content, mut with
   | Prel(r,x,y), Mut_Prel(w,z,l) when same_locs p.loc l && r = w ->
