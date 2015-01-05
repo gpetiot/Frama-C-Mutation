@@ -3,22 +3,16 @@ open Cil_types
 
 
 type mutation =
-  | Int_Arith of binop * binop * location (* PlusA, MinusA, Mult, Div, Mod *)
-  | Ptr_Arith of binop * binop * location (* PlusPI, IndexPI, MinusPI *)
-  | Logic_And_Or of binop * binop * location (* LAnd, LOr *)
-  | Comp of binop * binop * location (* Lt, Gt, Le, Ge, Eq, Ne *)
-  | Cond of exp * exp * location
+  | Mut_BinOp of binop * binop * location
+  | Mut_If of exp * exp * location
 
 
 let pp_mutation fmt = function
-  | Int_Arith(b1,b2,loc)
-  | Ptr_Arith(b1,b2,loc)
-  | Logic_And_Or(b1,b2,loc)
-  | Comp(b1,b2,loc) -> Format.fprintf fmt "%a: (%a) --> (%a)"
+  | Mut_BinOp(b1,b2,loc) -> Format.fprintf fmt "%a: (%a) --> (%a)"
     Printer.pp_location loc
     Printer.pp_binop b1
     Printer.pp_binop b2
-  | Cond(e1,e2,loc) -> Format.fprintf fmt "%a: %a --> %a"
+  | Mut_If(e1,e2,loc) -> Format.fprintf fmt "%a: %a --> %a"
     Printer.pp_location loc
     Printer.pp_exp e1
     Printer.pp_exp e2
@@ -42,13 +36,6 @@ let other_binops = function
   | Ne -> [Eq]
   | _ -> assert false
 
-let binop_mutation op1 op2 loc = match op1 with
-  | PlusA | MinusA | Mult | Div | Mod -> Int_Arith(op1,op2,loc)
-  | PlusPI | IndexPI | MinusPI -> Ptr_Arith(op1,op2,loc)
-  | LAnd | LOr -> Logic_And_Or(op1,op2,loc)
-  | Lt | Gt | Le | Ge | Eq | Ne -> Comp(op1,op2,loc)
-  | _ -> assert false
-
 
 class gatherer funcname = object(self)
   inherit Visitor.frama_c_inplace
@@ -61,7 +48,7 @@ class gatherer funcname = object(self)
   method! vexpr exp = match exp.enode with
   | BinOp((PlusA|MinusA|Mult|Div|Mod|PlusPI|IndexPI|MinusPI|LAnd|LOr|Lt|Gt|Le
 	      |Ge|Eq|Ne) as op, _, _, _) when Options.Mut_Code.get() ->
-    let add o = self#add (binop_mutation op o exp.eloc) in
+    let add o = self#add (Mut_BinOp (op, o, exp.eloc)) in
     List.iter add (other_binops op);
     Cil.DoChildren
   | _ -> Cil.DoChildren
@@ -69,7 +56,7 @@ class gatherer funcname = object(self)
   method! vstmt_aux stmt = match stmt.skind with
   | If (exp, _, _, loc) when Options.Mut_Code.get() ->
     let new_bool = Cil.new_exp loc (UnOp (LNot, exp, Cil.intType)) in
-    self#add (Cond(exp, new_bool, loc));
+    self#add (Mut_If(exp, new_bool, loc));
     Cil.DoChildren
   | _ -> Cil.DoChildren
 
@@ -86,15 +73,12 @@ class mutation_visitor prj mut name = object
   inherit Visitor.frama_c_copy prj
 
   method! vexpr exp = match (exp.enode, mut) with
-  | BinOp (o1, x, y, t), Int_Arith (o2, z, l)
-  | BinOp (o1, x, y, t), Ptr_Arith (o2, z, l)
-  | BinOp (o1, x, y, t), Logic_And_Or (o2, z, l)
-  | BinOp (o1, x, y, t), Comp (o2, z, l) when same_locs exp.eloc l && o1 = o2 ->
+  | BinOp (o1,x,y,t), Mut_BinOp (o2,z,l) when same_locs exp.eloc l && o1 = o2 ->
     Cil.ChangeDoChildrenPost (exp, fun e -> Cil.new_exp e.eloc (BinOp(z,x,y,t)))
   | _ -> Cil.DoChildren
 
   method! vstmt_aux stmt = match (stmt.skind, mut) with
-  | (If (e, x, y, loc), Cond (_, _, l)) when same_locs loc l ->
+  | (If (e, x, y, loc), Mut_If (_, _, l)) when same_locs loc l ->
     let e = Cil.new_exp loc (UnOp (LNot, e, Cil.intType)) in
     Cil.ChangeDoChildrenPost (stmt, fun s -> {s with skind = If (e, x, y, loc)})
   | _ -> Cil.DoChildren
