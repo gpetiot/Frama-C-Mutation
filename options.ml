@@ -37,10 +37,6 @@ module Mutate_Cond = Self.True (struct
   let option_name = "-mut-cond"
   let help = "negate conditions"
 end)
-module Mutate_Free = Self.False (struct
-  let option_name = "-mut-free"
-  let help = "delete `free` calls"
-end)
 
 module Only = Self.Int (struct
   let option_name = "-mut-only"

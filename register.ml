@@ -9,7 +9,6 @@ type mutation =
   | Comp of binop * binop * location (* Lt, Gt, Le, Ge, Eq, Ne *)
   | Mut_Lval of lval * lval * location
   | Cond of exp * exp * location
-  | Free of stmt * location
 
 
 module Mutation = struct
@@ -29,9 +28,6 @@ module Mutation = struct
     Printer.pp_location loc
     Printer.pp_exp e1
     Printer.pp_exp e2
-  | Free(s,loc) -> Format.fprintf fmt "%a: %a"
-    Printer.pp_location loc
-    Printer.pp_stmt s
 end
 
 
@@ -126,8 +122,6 @@ class gatherer funcname = object(self)
   method! vstmt_aux stmt =
     let f s =
       begin match s.skind with
-      | Instr(Call(_, {eloc=loc;enode=Lval(Var{vname="free"}, _)}, _, _)) ->
-	if Options.Mutate_Free.get() then self#add (Free(s,loc))
       | If (exp, _b1, _b2, loc) ->
 	if Options.Mutate_Cond.get() then
 	  let new_bool = Cil.new_exp loc (UnOp (LNot, exp, Cil.intType)) in
@@ -166,8 +160,6 @@ class mutation_visitor prj mut name = object
 
   method! vstmt_aux stmt =
     let f s = match (s.skind, mut) with
-      |(Instr(Call(_,{eloc=loc;enode=Lval(Var{vname="free"},_)},_,_)),Free(_,l))
-	  when same_locs loc l -> Cil.mkStmtCfgBlock []
       | (If (e, b1, b2, loc), Cond (_, _, l)) when same_locs loc l ->
 	let new_e = Cil.new_exp loc (UnOp (LNot, e, Cil.intType)) in
 	{s with skind = If (new_e, b1, b2, loc)}
