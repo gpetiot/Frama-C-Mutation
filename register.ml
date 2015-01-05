@@ -130,15 +130,15 @@ let rec mutate funcname cpt killed_mutants_cpt recap = function
 -rte -then -stady -then -werror -werror-no-unknown -werror-no-external"
       filename funcname in
     Project.copy ~selection:(Parameter_state.get_selection()) project;
-    let ret = Project.on project (fun () ->
+    let print_in_file () =
       Globals.set_entry_point funcname false;
       let chan = open_out filename in
       File.pretty_ast ~fmt:(Format.formatter_of_out_channel chan) ();
       flush chan;
-      close_out chan;
-      (Sys.command cmd) = 0
-    ) ()
+      close_out chan
     in
+    Project.on project print_in_file ();
+    let ret = (Sys.command cmd) = 0 in
     let k_m_cpt = if ret then killed_mutants_cpt else killed_mutants_cpt + 1 in
     Options.Self.debug ~level:2 "%a (%s)" pp_mutation h filename;
     Project.remove ~project ();
