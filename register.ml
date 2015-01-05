@@ -8,6 +8,7 @@ type mutation =
   | Mut_If of exp * exp * location
   (* mutations on spec *)
   | Mut_TBinOp of binop * binop * location
+  | Mut_Prel of relation * relation * location
 
 
 let pp_mutation fmt = function
@@ -20,6 +21,10 @@ let pp_mutation fmt = function
     Printer.pp_location loc
     Printer.pp_exp e1
     Printer.pp_exp e2
+  | Mut_Prel(r1,r2,loc) -> Format.fprintf fmt "%a: (%a) --> (%a)"
+    Printer.pp_location loc
+    Printer.pp_relation r1
+    Printer.pp_relation r2
 
 
 let other_binops = function
@@ -40,6 +45,14 @@ let other_binops = function
   | Ne -> [Eq]
   | _ -> assert false
 
+let other_relations = function
+  | Rlt -> [Rgt;Rle;Rge;Req;Rneq]
+  | Rgt -> [Rlt;Rle;Rge;Req;Rneq]
+  | Rle -> [Rlt;Rgt;Rge;Req;Rneq]
+  | Rge -> [Rlt;Rgt;Rle;Req;Rneq]
+  | Req -> [Rneq]
+  | Rneq -> [Req]
+
 
 let loc_ok (loc,_) =
   Filename.basename loc.Lexing.pos_fname <> "__fc_builtin_for_normalization.i"
@@ -52,6 +65,13 @@ class gatherer funcname = object(self)
 
   method get_mutations() = mutations
   method private add m = mutations <- m :: mutations
+
+  method! vpredicate_named p = match p.content with
+  | Prel(r,_,_) when Options.Mut_Spec.get() && loc_ok p.loc ->
+    let add o = self#add (Mut_Prel (r, o, p.loc)) in
+    List.iter add (other_relations r);
+    Cil.DoChildren
+  | _ -> Cil.DoChildren
 
   method! vterm t = match t.term_node with
   | TBinOp((PlusA|MinusA|Mult|Div|Mod|PlusPI|IndexPI|MinusPI|LAnd|LOr|Lt|Gt|Le
@@ -89,18 +109,23 @@ let same_locs l1 l2 = (Cil_datatype.Location.compare l1 l2) = 0
 class mutation_visitor prj mut name = object
   inherit Visitor.frama_c_copy prj
 
-  method! vterm term = match (term.term_node, mut) with
+  method! vpredicate_named p = match p.content, mut with
+  | Prel(r,x,y), Mut_Prel(w,z,l) when same_locs p.loc l && r = w ->
+    Cil.ChangeDoChildrenPost (p, fun _ -> Logic_const.prel (z,x,y))
+  | _ -> Cil.DoChildren
+
+  method! vterm term = match term.term_node, mut with
   | TBinOp(o,x,y), Mut_TBinOp(w,z,l) when same_locs term.term_loc l && o = w->
     Cil.ChangeDoChildrenPost
       (term, fun t -> Logic_const.term (TBinOp(z,x,y)) t.term_type)
   | _ -> Cil.DoChildren
 
-  method! vexpr exp = match (exp.enode, mut) with
+  method! vexpr exp = match exp.enode, mut with
   | BinOp (o1,x,y,t), Mut_BinOp (o2,z,l) when same_locs exp.eloc l && o1 = o2 ->
     Cil.ChangeDoChildrenPost (exp, fun e -> Cil.new_exp e.eloc (BinOp(z,x,y,t)))
   | _ -> Cil.DoChildren
 
-  method! vstmt_aux stmt = match (stmt.skind, mut) with
+  method! vstmt_aux stmt = match stmt.skind, mut with
   | (If (e, x, y, loc), Mut_If (_, _, l)) when same_locs loc l ->
     let e = Cil.new_exp loc (UnOp (LNot, e, Cil.intType)) in
     Cil.ChangeDoChildrenPost (stmt, fun s -> {s with skind = If (e, x, y, loc)})
