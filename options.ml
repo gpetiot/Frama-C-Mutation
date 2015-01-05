@@ -29,10 +29,6 @@ module Mutate_Comp = Self.True (struct
   let option_name = "-mut-comp"
   let help = "mutate comparison operations"
 end)
-module Mutate_Lval = Self.False (struct
-  let option_name = "-mut-lval"
-  let help = "mutate lval into another lval in the same scope"
-end)
 module Mutate_Cond = Self.True (struct
   let option_name = "-mut-cond"
   let help = "negate conditions"

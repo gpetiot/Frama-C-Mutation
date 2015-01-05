@@ -4,10 +4,9 @@ open Cil_types
 
 type mutation =
   | Int_Arith of binop * binop * location (* PlusA, MinusA, Mult, Div, Mod *)
-  | Ptr_Arith of binop * binop * location (* PlusPI, IndexPI,  MinusPI *)
+  | Ptr_Arith of binop * binop * location (* PlusPI, IndexPI, MinusPI *)
   | Logic_And_Or of binop * binop * location (* LAnd, LOr *)
   | Comp of binop * binop * location (* Lt, Gt, Le, Ge, Eq, Ne *)
-  | Mut_Lval of lval * lval * location
   | Cond of exp * exp * location
 
 
@@ -20,10 +19,6 @@ module Mutation = struct
     Printer.pp_location loc
     Printer.pp_binop b1
     Printer.pp_binop b2
-  | Mut_Lval(l1,l2,loc) -> Format.fprintf fmt "%a: %a --> %a"
-    Printer.pp_location loc
-    Printer.pp_lval l1
-    Printer.pp_lval l2
   | Cond(e1,e2,loc) -> Format.fprintf fmt "%a: %a --> %a"
     Printer.pp_location loc
     Printer.pp_exp e1
@@ -63,32 +58,14 @@ let binop_mutation op1 op2 loc = match op1 with
   | Lt | Gt | Le | Ge | Eq | Ne -> Comp(op1,op2,loc)
   | _ -> failwith "constr_binop"
 
-let rec compat_types t1 t2 = match (t1, t2) with
-  | TVoid _, TVoid _
-  | TInt _, TInt _
-  | TFloat _, TFloat _
-  | TInt _, TFloat _
-  | TFloat _, TInt _ -> true
-  | TFun (p1, _, _, _), TFun (p2, _, _, _)
-  | TPtr (p1, _), TPtr (p2, _)
-  | TArray (p1, _, _, _), TArray (p2, _, _, _) -> compat_types p1 p2
-  | TNamed ({ttype=ty}, _), k
-  | k, TNamed ({ttype=ty}, _) -> compat_types ty k
-  | _ -> false
-
 
 class gatherer funcname = object(self)
   inherit Visitor.frama_c_inplace
 
-  val blocks:(block Stack.t) = Stack.create()
   val mutable mutations = []
 
   method get_mutations() = mutations
   method private add m = mutations <- m :: mutations
-
-  method! vblock block =
-    Stack.push block blocks;
-    Cil.ChangeDoChildrenPost (block, (fun b -> let _ = Stack.pop blocks in b))
 
   method! vexpr exp =
     let f e =
@@ -102,17 +79,6 @@ class gatherer funcname = object(self)
 	      List.iter add (other_binops op)
 	  with _ -> ()
 	end
-      | Lval ((Var vi,offset) as lv) ->
-	if Options.Mutate_Lval.get() then
-	  let vars = (Stack.top blocks).blocals in
-	  let vars = match self#current_kf with
-	    | Some {fundec=Definition(d,_)} -> List.rev_append d.sformals vars
-	    | _ -> vars
-	  in
-	  let compat x = x.vid <> vi.vid && compat_types x.vtype vi.vtype in
-	  let other_vars = List.filter compat vars in
-	  let add v = self#add (Mut_Lval(lv,(Var v, offset),loc)) in
-	  List.iter add other_vars
       | _ -> ()
       end;
       e
@@ -152,8 +118,6 @@ class mutation_visitor prj mut name = object
       | BinOp (_, e1, e2, ty), Logic_And_Or (_, b2, l)
       | BinOp (_, e1, e2, ty), Comp (_, b2, l) when same_locs e.eloc l ->
 	Cil.new_exp e.eloc (BinOp (b2, e1, e2, ty))
-      | Lval _, Mut_Lval (_, v, l) when same_locs e.eloc l ->
-	Cil.new_exp e.eloc (Lval v)
       | _ -> e
     in
     Cil.ChangeDoChildrenPost (exp, f)
