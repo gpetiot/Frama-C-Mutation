@@ -10,8 +10,7 @@ type mutation =
   | Cond of exp * exp * location
 
 
-module Mutation = struct
-  let pretty fmt = function
+let pp_mutation fmt = function
   | Int_Arith(b1,b2,loc)
   | Ptr_Arith(b1,b2,loc)
   | Logic_And_Or(b1,b2,loc)
@@ -23,7 +22,6 @@ module Mutation = struct
     Printer.pp_location loc
     Printer.pp_exp e1
     Printer.pp_exp e2
-end
 
 
 let other_binops = function
@@ -131,7 +129,7 @@ let run() =
 	mutate (cpt+1) recap t
       | h::t ->
 	let filename = "mutant_"^(string_of_int cpt)^".c" in
-	Options.Self.feedback "mutant %i %a" cpt Mutation.pretty h;
+	Options.Self.feedback "mutant %i %a" cpt pp_mutation h;
 	let f p = new mutation_visitor p h funcname in
 	let p_name = "__mut" ^ (string_of_int cpt) in
 	let project = File.create_project_from_visitor p_name f in
@@ -149,7 +147,7 @@ let run() =
 	) ()
 	in
 	if not ret then killed_mutants_cpt := !killed_mutants_cpt +1;
-	Options.Self.debug ~level:2 "%a (%s)" Mutation.pretty h filename;
+	Options.Self.debug ~level:2 "%a (%s)" pp_mutation h filename;
 	Project.remove ~project ();
 	mutate (cpt+1) ((cpt, ret, h) :: recap) t
     in
@@ -157,7 +155,7 @@ let run() =
     Options.Self.feedback "|      | Killed |   Not  |";
     List.iter (fun (i,r,m) ->
       Options.Self.feedback "| %4i |   %c    |   %c    | %a"
-	i (if r then ' ' else 'X') (if r then 'X' else ' ') Mutation.pretty m;
+	i (if r then ' ' else 'X') (if r then 'X' else ' ') pp_mutation m;
       Options.Self.feedback "--------------------------"
     ) recap;
     Options.Self.result "%i mutants" (List.length mutations);
