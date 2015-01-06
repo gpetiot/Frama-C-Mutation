@@ -1,4 +1,5 @@
-[kernel] preprocessing with "gcc -C -E -I.  tests/search/search.c"
+[kernel] Parsing FRAMAC_SHARE/libc/__fc_builtin_for_normalization.i (no preprocessing)
+[kernel] Parsing tests/search/search.c (with preprocessing)
 [mut:progress] 54 mutants
 [mut:progress] mutant 0 tests/search/search.c:6: `+` --> `-`
 [mut:mutant] mutant 0:
