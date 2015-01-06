@@ -75,12 +75,14 @@ class gatherer funcname = object(self)
     let add (_,p) = self#add (Mut_Post p) in
     if Kernel_function.get_name kf <> funcname then
       match bhv.b_post_cond with
-      | (_,h)::_ as l when loc_ok h.ip_loc -> List.iter add l; Cil.DoChildren
+      | (_,h)::_ as l when Options.Mut_Spec.get() && loc_ok h.ip_loc ->
+	List.iter add l;
+	Cil.DoChildren
       | _ -> Cil.DoChildren
     else Cil.DoChildren
 
   method! vcode_annot ca = match ca.annot_content with
-  | AInvariant(_,linv,p) when linv && loc_ok p.loc ->
+  | AInvariant(_,linv,p) when Options.Mut_Spec.get() && linv && loc_ok p.loc ->
     self#add (Mut_LoopInv p);
     Cil.DoChildren
   | _ -> Cil.DoChildren
