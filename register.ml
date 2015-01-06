@@ -12,6 +12,7 @@ type mutation =
   | Mut_Pnot of predicate named * predicate named * location
   | Mut_Assigns of identified_term
   | Mut_LoopInv of predicate named
+  | Mut_Post of identified_predicate
 
 let pp_aux fmt f e1 e2 loc =
   Format.fprintf fmt "%a: `%a` --> `%a`" Printer.pp_location loc f e1 f e2
@@ -26,6 +27,8 @@ let pp_mutation fmt = function
     Printer.pp_location t.it_content.term_loc Printer.pp_identified_term t
   | Mut_LoopInv p -> Format.fprintf fmt "%a: - loop invariant %a"
     Printer.pp_location p.loc Printer.pp_predicate_named p
+  | Mut_Post p -> Format.fprintf fmt "%a: - ensures %a"
+    Printer.pp_location p.ip_loc Printer.pp_identified_predicate p
 
 
 let other_binops = function
@@ -66,6 +69,15 @@ class gatherer funcname = object(self)
 
   method get_mutations() = mutations
   method private add m = mutations <- m :: mutations
+
+  method! vbehavior bhv =
+    let kf = Extlib.the (self#current_kf) in
+    let add (_,p) = self#add (Mut_Post p) in
+    if Kernel_function.get_name kf <> funcname then
+      match bhv.b_post_cond with
+      | (_,h)::_ as l when loc_ok h.ip_loc -> List.iter add l; Cil.DoChildren
+      | _ -> Cil.DoChildren
+    else Cil.DoChildren
 
   method! vcode_annot ca = match ca.annot_content with
   | AInvariant(_,linv,p) when linv && loc_ok p.loc ->
@@ -126,6 +138,12 @@ let same_locs l1 l2 = (Cil_datatype.Location.compare l1 l2) = 0
 class mutation_visitor prj mut name = object
   inherit Visitor.frama_c_copy prj
 
+  method! vbehavior bhv = match mut with
+  | Mut_Post m ->
+    let l = List.filter (fun (_,p) -> p.ip_id <> m.ip_id) bhv.b_post_cond in
+    Cil.ChangeDoChildrenPost (bhv, fun b -> {b with b_post_cond = l})
+  | _ -> Cil.DoChildren
+
   method! vcode_annot ca = match ca.annot_content, mut with
   | AInvariant(_,linv,p), Mut_LoopInv m when linv && same_locs p.loc m.loc ->
     let ca2 = AInvariant([],true,Logic_const.ptrue) in
@@ -157,7 +175,7 @@ class mutation_visitor prj mut name = object
   | _ -> Cil.DoChildren
 
   method! vstmt_aux stmt = match stmt.skind, mut with
-  | (If (e, x, y, loc), Mut_If (_, _, l)) when same_locs loc l ->
+  | If (e, x, y, loc), Mut_If (_, _, l) when same_locs loc l ->
     let e = Cil.new_exp loc (UnOp (LNot, e, Cil.intType)) in
     Cil.ChangeDoChildrenPost (stmt, fun s -> {s with skind = If (e, x, y, loc)})
   | _ -> Cil.DoChildren
