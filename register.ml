@@ -137,7 +137,7 @@ end
 let same_locs l1 l2 = (Cil_datatype.Location.compare l1 l2) = 0
 
 
-class mutation_visitor prj mut name = object
+class mutation_visitor prj mut = object
   inherit Visitor.frama_c_copy prj
 
   method! vbehavior bhv = match mut with
@@ -194,7 +194,7 @@ let rec mutate funcname cpt killed_mutants_cpt recap = function
     let filename = "mutant_" ^ (string_of_int cpt) ^ ".c" in
     let dkey = Options.dkey_progress in
     Options.Self.feedback ~dkey "mutant %i %a" cpt pp_mutation h;
-    let f p = new mutation_visitor p h funcname in
+    let f p = new mutation_visitor p h in
     let project = File.create_project_from_visitor "__mut_tmp" f in
     Project.copy ~selection:(Parameter_state.get_selection()) project;
     let print_in_file () =
