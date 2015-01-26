@@ -37,8 +37,6 @@ let other_binops = function
   | Mult -> [Div;Mod;PlusA;MinusA]
   | Div -> [Mult;Mod;PlusA;MinusA]
   | Mod -> [Mult;Div;PlusA;MinusA]
-  | PlusPI | IndexPI -> [MinusPI]
-  | MinusPI -> [PlusPI]
   | LAnd -> [LOr]
   | LOr -> [LAnd]
   | Lt -> [Le;Gt;Ge;Eq;Ne]
@@ -105,20 +103,19 @@ class gatherer funcname = object(self)
   | _ -> Cil.DoChildren
 
   method! vterm t = match t.term_node with
-  | TBinOp((PlusA|MinusA|Mult|Div|Mod|PlusPI|IndexPI|MinusPI|LAnd|LOr|Lt|Gt|Le
-	      |Ge|Eq|Ne) as op, _, _)
-      when Options.Mut_Spec.get() && loc_ok t.term_loc ->
-    let add o = self#add (Mut_TBinOp (op, o, t.term_loc)) in
-    List.iter add (other_binops op);
-    Cil.DoChildren
+  | TBinOp((PlusA|MinusA|Mult|Div|Mod|LAnd|LOr|Lt|Gt|Le|Ge|Eq|Ne) as op, _, _)
+       when Options.Mut_Spec.get() && loc_ok t.term_loc ->
+     let add o = self#add (Mut_TBinOp (op, o, t.term_loc)) in
+     List.iter add (other_binops op);
+     Cil.DoChildren
   | _ -> Cil.DoChildren
 
   method! vexpr exp = match exp.enode with
-  | BinOp((PlusA|MinusA|Mult|Div|Mod|PlusPI|IndexPI|MinusPI|LAnd|LOr|Lt|Gt|Le
-	      |Ge|Eq|Ne) as op, _, _, _) when Options.Mut_Code.get() ->
-    let add o = self#add (Mut_BinOp (op, o, exp.eloc)) in
-    List.iter add (other_binops op);
-    Cil.DoChildren
+  | BinOp((PlusA|MinusA|Mult|Div|Mod|LAnd|LOr|Lt|Gt|Le|Ge|Eq|Ne) as op, _, _, _)
+       when Options.Mut_Code.get() ->
+     let add o = self#add (Mut_BinOp (op, o, exp.eloc)) in
+     List.iter add (other_binops op);
+     Cil.DoChildren
   | _ -> Cil.DoChildren
 
   method! vstmt_aux stmt = match stmt.skind with
