@@ -77,7 +77,10 @@ class gatherer funcname = object(self)
 	List.iter add l;
 	Cil.DoChildren
       | _ -> Cil.DoChildren
-    else Cil.DoChildren
+    else (* for main function: only mutate postcondition predicates *)
+      let f (_,h) = ignore (self#videntified_predicate h) in
+      List.iter f bhv.b_post_cond;
+      Cil.SkipChildren
 
   method! vcode_annot ca = match ca.annot_content with
   | AInvariant(_,linv,p) when Options.Mut_Spec.get() && linv && loc_ok p.loc ->
