@@ -10,7 +10,6 @@ type mutation =
   | Mut_TBinOp of binop * binop * location
   | Mut_Prel of relation * relation * location
   | Mut_Pnot of predicate named * predicate named * location
-  | Mut_Assigns of identified_term
   | Mut_LoopInv of predicate named
   | Mut_Post of identified_predicate
 
@@ -23,8 +22,6 @@ let pp_mutation fmt = function
   | Mut_If(e1,e2,loc) -> pp_aux fmt Printer.pp_exp e1 e2 loc
   | Mut_Prel(r1,r2,loc) -> pp_aux fmt Printer.pp_relation r1 r2 loc
   | Mut_Pnot(p1,p2,loc) -> pp_aux fmt Printer.pp_predicate_named p1 p2 loc
-  | Mut_Assigns t -> Format.fprintf fmt "%a: - assigns %a"
-    Printer.pp_location t.it_content.term_loc Printer.pp_identified_term t
   | Mut_LoopInv p -> Format.fprintf fmt "%a: - loop invariant %a"
     Printer.pp_location p.loc Printer.pp_predicate_named p
   | Mut_Post p -> Format.fprintf fmt "%a: - ensures %a"
@@ -88,13 +85,6 @@ class gatherer funcname = object(self)
     Cil.DoChildren
   | _ -> Cil.DoChildren
 
-  method! vassigns = function
-  | Writes ((h,_)::_ as t)
-      when Options.Mut_Spec.get() && t <> [] && loc_ok h.it_content.term_loc ->
-    List.iter (fun (x,_) -> self#add (Mut_Assigns x)) t;
-    Cil.SkipChildren
-  | _ -> Cil.SkipChildren
-
   method! vpredicate_named p = match p.content with
   | Prel(r,_,_) when Options.Mut_Spec.get() && loc_ok p.loc ->
     let add o = self#add (Mut_Prel (r, o, p.loc)) in
@@ -150,12 +140,6 @@ class mutation_visitor prj mut = object
   | AInvariant(_,linv,p), Mut_LoopInv m when linv && same_locs p.loc m.loc ->
     let ca2 = AInvariant([],true,Logic_const.ptrue) in
     Cil.ChangeDoChildrenPost (ca, fun _ -> Logic_const.new_code_annotation ca2)
-  | _ -> Cil.DoChildren
-
-  method! vassigns a = match a, mut with
-  | Writes t, Mut_Assigns m ->
-    let t2 = List.filter (fun (x,_) -> x.it_id <> m.it_id) t in
-    Cil.ChangeDoChildrenPost (a, fun _ -> Writes t2)
   | _ -> Cil.DoChildren
 
   method! vpredicate_named p = match p.content, mut with
