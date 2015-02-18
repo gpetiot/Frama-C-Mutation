@@ -44,13 +44,13 @@ let other_binops = function
   | Ne -> [Eq]
   | _ -> assert false
 
-let other_relations = function
-  | Rlt -> [Rgt;Rle;Rge;Req;Rneq]
-  | Rgt -> [Rlt;Rle;Rge;Req;Rneq]
-  | Rle -> [Rlt;Rgt;Rge;Req;Rneq]
-  | Rge -> [Rlt;Rgt;Rle;Req;Rneq]
-  | Req -> [Rneq]
-  | Rneq -> [Req]
+let other_relation = function
+  | Rlt -> Rle
+  | Rgt -> Rge
+  | Rle -> Rlt
+  | Rge -> Rgt
+  | Req -> Rneq
+  | Rneq -> Req
 
 
 let loc_ok (loc,_) =
@@ -88,7 +88,7 @@ class gatherer funcname = object(self)
   method! vpredicate_named p = match p.content with
   | Prel(r,_,_) when Options.Mut_Spec.get() && loc_ok p.loc ->
     let add o = self#add (Mut_Prel (r, o, p.loc)) in
-    List.iter add (other_relations r);
+    add (other_relation r);
     Cil.DoChildren
   | Pnot(p2) when Options.Mut_Spec.get() && loc_ok p.loc ->
     self#add (Mut_Pnot (p, p2, p.loc));
