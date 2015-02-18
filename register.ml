@@ -168,26 +168,26 @@ class mutation_visitor prj mut = object
 end
 
 
-let rec mutate funcname cpt killed_mutants recap = function
+let rec mutate fct cpt killed_mutants recap = function
   | [] -> killed_mutants, recap
   | _ when Options.Only.get() <> -1 && Options.Only.get() < cpt ->
     killed_mutants, recap
   | _::t when Options.Only.get() <> -1 && Options.Only.get() > cpt ->
-    mutate funcname (cpt+1) killed_mutants recap t
+    mutate fct (cpt+1) killed_mutants recap t
   | h::t ->
-    let filename = "mutant_" ^ (string_of_int cpt) ^ ".c" in
+    let file = "mutant_" ^ (string_of_int cpt) ^ ".c" in
     let dkey = Options.dkey_progress in
     Options.Self.feedback ~dkey "mutant %i %a" cpt pp_mut h;
     let f p = new mutation_visitor p h in
     let project = File.create_project_from_visitor "__mut_tmp" f in
     Project.copy ~selection:(Parameter_state.get_selection()) project;
     let print_in_file () =
-      Globals.set_entry_point funcname false;
+      Globals.set_entry_point fct false;
       Kernel.Unicode.set false;
       let buf = Buffer.create 512 in
       let fmt = Format.formatter_of_buffer buf in
       File.pretty_ast ~fmt ();
-      let out_file = open_out filename in
+      let out_file = open_out file in
       Options.Self.feedback ~dkey:Options.dkey_mutant "mutant %i:" cpt;
       let dkeys = Options.Self.Debug_category.get() in
       if Datatype.String.Set.mem "mutant" dkeys then
@@ -202,15 +202,13 @@ let rec mutate funcname cpt killed_mutants recap = function
     Project.on project print_in_file ();
     let is_killed = match Options.Apply_to_Mutant.get() with
       | "" -> false
-      | plugins ->
-	let cmd = Printf.sprintf "frama-c %s -main %s -no-unicode \
-%s -then -werror -werror-no-unknown -werror-no-external"
-	  filename funcname plugins in
+      | to_apply ->
+	let cmd = Printf.sprintf "frama-c %s -main %s %s" file fct to_apply in
 	(Sys.command cmd) = 0
     in
     let k_m_cpt = if is_killed then killed_mutants + 1 else killed_mutants in
     Project.remove ~project ();
-    mutate funcname (cpt+1) k_m_cpt ((cpt, is_killed, h) :: recap) t
+    mutate fct (cpt+1) k_m_cpt ((cpt, is_killed, h) :: recap) t
 
 
 let run() =
