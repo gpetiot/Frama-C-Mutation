@@ -16,7 +16,7 @@ type mutation =
 let pp_aux fmt f e1 e2 loc =
   Format.fprintf fmt "%a: `%a` --> `%a`" Printer.pp_location loc f e1 f e2
 
-let pp_mutation fmt = function
+let pp_mut fmt = function
   | Mut_TBinOp(b1,b2,loc)
   | Mut_BinOp(b1,b2,loc) -> pp_aux fmt Printer.pp_binop b1 b2 loc
   | Mut_If(e1,e2,loc) -> pp_aux fmt Printer.pp_exp e1 e2 loc
@@ -168,16 +168,16 @@ class mutation_visitor prj mut = object
 end
 
 
-let rec mutate funcname cpt killed_mutants_cpt recap = function
-  | [] -> killed_mutants_cpt, recap
+let rec mutate funcname cpt killed_mutants recap = function
+  | [] -> killed_mutants, recap
   | _ when Options.Only.get() <> -1 && Options.Only.get() < cpt ->
-    killed_mutants_cpt, recap
+    killed_mutants, recap
   | _::t when Options.Only.get() <> -1 && Options.Only.get() > cpt ->
-    mutate funcname (cpt+1) killed_mutants_cpt recap t
+    mutate funcname (cpt+1) killed_mutants recap t
   | h::t ->
     let filename = "mutant_" ^ (string_of_int cpt) ^ ".c" in
     let dkey = Options.dkey_progress in
-    Options.Self.feedback ~dkey "mutant %i %a" cpt pp_mutation h;
+    Options.Self.feedback ~dkey "mutant %i %a" cpt pp_mut h;
     let f p = new mutation_visitor p h in
     let project = File.create_project_from_visitor "__mut_tmp" f in
     Project.copy ~selection:(Parameter_state.get_selection()) project;
@@ -200,7 +200,7 @@ let rec mutate funcname cpt killed_mutants_cpt recap = function
       Buffer.clear buf
     in
     Project.on project print_in_file ();
-    let ret = match Options.Apply_to_Mutant.get() with
+    let is_killed = match Options.Apply_to_Mutant.get() with
       | "" -> false
       | plugins ->
 	let cmd = Printf.sprintf "frama-c %s -main %s -no-unicode \
@@ -208,9 +208,9 @@ let rec mutate funcname cpt killed_mutants_cpt recap = function
 	  filename funcname plugins in
 	(Sys.command cmd) = 0
     in
-    let k_m_cpt = if ret then killed_mutants_cpt else killed_mutants_cpt + 1 in
+    let k_m_cpt = if is_killed then killed_mutants + 1 else killed_mutants in
     Project.remove ~project ();
-    mutate funcname (cpt+1) k_m_cpt ((cpt, ret, h) :: recap) t
+    mutate funcname (cpt+1) k_m_cpt ((cpt, is_killed, h) :: recap) t
 
 
 let run() =
@@ -224,11 +224,15 @@ let run() =
     let killed_mutants_cpt, recap = mutate funcname 0 0 [] mutations in
     let dkey = Options.dkey_report in
     Options.Self.result ~dkey "|      | Killed |   Not  |";
-    List.iter (fun (i,r,m) ->
-      Options.Self.result ~dkey "| %4i |   %c    |   %c    | %a"
-	i (if r then ' ' else 'X') (if r then 'X' else ' ') pp_mutation m;
-      Options.Self.result ~dkey "--------------------------"
-    ) recap;
+    let on_mutant (i,killed,m) = match killed with
+      | true ->
+	 Options.Self.result ~dkey "| %4i |   X    |        | %a" i pp_mut m;
+	 Options.Self.result ~dkey "--------------------------"
+      | false ->
+	 Options.Self.result ~dkey "| %4i |        |   X    | %a" i pp_mut m;
+	 Options.Self.result ~dkey "--------------------------"
+    in
+    List.iter on_mutant recap;
     Options.Self.result ~dkey "%i mutants" n_mutations;
     Options.Self.result ~dkey "%i mutants killed" killed_mutants_cpt
 	
