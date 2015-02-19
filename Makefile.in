@@ -16,7 +16,7 @@ endif
 
 PLUGIN_DIR ?=.
 PLUGIN_NAME := Mutation
-PLUGIN_CMO := local_config options register
+PLUGIN_CMO := local_config mut_options mut_register
 PLUGIN_GUI_CMO 	:= 
 PLUGIN_HAS_MLI:= yes
 PLUGIN_DISTRIBUTED:=no

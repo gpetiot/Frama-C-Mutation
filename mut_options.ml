@@ -29,12 +29,27 @@ module Only = Self.Int (struct
   let default = -1
 end)
 
-module Apply_to_Mutant = Self.String (struct
-  let option_name = "-mut-apply"
-  let help = "plugin(s) to apply to mutants"
-  let arg_name = "str"
-  let default = ""
-end)
+(* StaDy *)
+
+module Int_for_collection = struct
+  include Datatype.Int
+  let of_string = int_of_string
+  let to_string = string_of_int
+  let of_singleton_string = Self.no_element_of_string
+end
+
+module Int_list(X: Parameter_sig.Input_with_arg) =
+  Self.Make_list
+    (Int_for_collection)
+    (struct include X let default = [] end)
+
+module Contract_weakness_detection =
+  Int_list
+    (struct
+      let option_name = "-mut-cwd"
+      let help = "identifiers of statement to check for contract weakness"
+      let arg_name = "i,..."
+    end)
 
 (* Debug Keys *)
 

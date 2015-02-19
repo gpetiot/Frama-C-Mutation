@@ -16,7 +16,7 @@ type mutation =
 let pp_aux fmt f e1 e2 loc =
   Format.fprintf fmt "%a: `%a` --> `%a`" Printer.pp_location loc f e1 f e2
 
-let pp_mut fmt = function
+let pp_mutation fmt = function
   | Mut_TBinOp(b1,b2,loc)
   | Mut_BinOp(b1,b2,loc) -> pp_aux fmt Printer.pp_binop b1 b2 loc
   | Mut_If(e1,e2,loc) -> pp_aux fmt Printer.pp_exp e1 e2 loc
@@ -70,7 +70,7 @@ class gatherer funcname = object(self)
     let add (_,p) = self#add (Mut_Post p) in
     if Kernel_function.get_name kf <> funcname then
       match bhv.b_post_cond with
-      | (_,h)::_ as l when Options.Mut_Spec.get() && loc_ok h.ip_loc ->
+      | (_,h)::_ as l when Mut_options.Mut_Spec.get() && loc_ok h.ip_loc ->
 	List.iter add l;
 	Cil.DoChildren
       | _ -> Cil.DoChildren
@@ -80,24 +80,24 @@ class gatherer funcname = object(self)
       Cil.SkipChildren
 
   method! vcode_annot ca = match ca.annot_content with
-  | AInvariant(_,linv,p) when Options.Mut_Spec.get() && linv && loc_ok p.loc ->
+  | AInvariant(_,b,p) when Mut_options.Mut_Spec.get() && b && loc_ok p.loc ->
     self#add (Mut_LoopInv p);
     Cil.DoChildren
   | _ -> Cil.DoChildren
 
   method! vpredicate_named p = match p.content with
-  | Prel(r,_,_) when Options.Mut_Spec.get() && loc_ok p.loc ->
+  | Prel(r,_,_) when Mut_options.Mut_Spec.get() && loc_ok p.loc ->
     let add o = self#add (Mut_Prel (r, o, p.loc)) in
     add (other_relation r);
     Cil.DoChildren
-  | Pnot(p2) when Options.Mut_Spec.get() && loc_ok p.loc ->
+  | Pnot(p2) when Mut_options.Mut_Spec.get() && loc_ok p.loc ->
     self#add (Mut_Pnot (p, p2, p.loc));
     Cil.DoChildren
   | _ -> Cil.DoChildren
 
   method! vterm t = match t.term_node with
   | TBinOp((PlusA|MinusA|Mult|Div|Mod|LAnd|LOr|Lt|Gt|Le|Ge|Eq|Ne) as op, _, _)
-       when Options.Mut_Spec.get() && loc_ok t.term_loc ->
+       when Mut_options.Mut_Spec.get() && loc_ok t.term_loc ->
      let add o = self#add (Mut_TBinOp (op, o, t.term_loc)) in
      List.iter add (other_binops op);
      Cil.DoChildren
@@ -105,14 +105,14 @@ class gatherer funcname = object(self)
 
   method! vexpr exp = match exp.enode with
   | BinOp((PlusA|MinusA|Mult|Div|Mod|LAnd|LOr|Lt|Gt|Le|Ge|Eq|Ne) as op, _, _, _)
-       when Options.Mut_Code.get() ->
+       when Mut_options.Mut_Code.get() ->
      let add o = self#add (Mut_BinOp (op, o, exp.eloc)) in
      List.iter add (other_binops op);
      Cil.DoChildren
   | _ -> Cil.DoChildren
 
   method! vstmt_aux stmt = match stmt.skind with
-  | If (exp, _, _, loc) when Options.Mut_Code.get() ->
+  | If (exp, _, _, loc) when Mut_options.Mut_Code.get() ->
     let new_bool = Cil.new_exp loc (UnOp (LNot, exp, Cil.intType)) in
     self#add (Mut_If(exp, new_bool, loc));
     Cil.DoChildren
@@ -167,17 +167,40 @@ class mutation_visitor prj mut = object
   | _ -> Cil.DoChildren
 end
 
+type verdict = Not_tried | Verdict of bool
 
-let rec mutate fct cpt killed_mutants recap = function
-  | [] -> killed_mutants, recap
-  | _ when Options.Only.get() <> -1 && Options.Only.get() < cpt ->
-    killed_mutants, recap
-  | _::t when Options.Only.get() <> -1 && Options.Only.get() > cpt ->
-    mutate fct (cpt+1) killed_mutants recap t
+let pp_verdict fmt = function
+  | Not_tried -> Format.fprintf fmt "-"
+  | Verdict true -> Format.fprintf fmt "T"
+  | Verdict false -> Format.fprintf fmt "F"
+
+type mutant = {
+  id : int;
+  mutation : mutation;
+  is_proved : verdict;
+  nc_detected : verdict;
+  cw_detected : verdict;
+}
+
+let pp_mutant fmt m =
+  Format.fprintf fmt "| %4i |    %a  |  %a  |  %a  | %a"
+		 m.id
+		 pp_verdict m.is_proved
+		 pp_verdict m.nc_detected
+		 pp_verdict m.cw_detected
+		 pp_mutation m.mutation
+
+
+let rec mutate fct cpt ncd cwd recap = function
+  | [] -> ncd, cwd, recap
+  | _ when Mut_options.Only.get() <> -1 && Mut_options.Only.get() < cpt ->
+     ncd, cwd, recap
+  | _::t when Mut_options.Only.get() <> -1 && Mut_options.Only.get() > cpt ->
+    mutate fct (cpt+1) ncd cwd recap t
   | h::t ->
     let file = "mutant_" ^ (string_of_int cpt) ^ ".c" in
-    let dkey = Options.dkey_progress in
-    Options.Self.feedback ~dkey "mutant %i %a" cpt pp_mut h;
+    let dkey = Mut_options.dkey_progress in
+    Mut_options.Self.feedback ~dkey "mutant %i %a" cpt pp_mutation h;
     let f p = new mutation_visitor p h in
     let project = File.create_project_from_visitor "__mut_tmp" f in
     Project.copy ~selection:(Parameter_state.get_selection()) project;
@@ -188,8 +211,8 @@ let rec mutate fct cpt killed_mutants recap = function
       let fmt = Format.formatter_of_buffer buf in
       File.pretty_ast ~fmt ();
       let out_file = open_out file in
-      Options.Self.feedback ~dkey:Options.dkey_mutant "mutant %i:" cpt;
-      let dkeys = Options.Self.Debug_category.get() in
+      Mut_options.Self.feedback ~dkey:Mut_options.dkey_mutant "mutant %i:" cpt;
+      let dkeys = Mut_options.Self.Debug_category.get() in
       if Datatype.String.Set.mem "mutant" dkeys then
 	Buffer.output_buffer stdout buf;
       Buffer.output_buffer out_file buf;
@@ -200,43 +223,82 @@ let rec mutate fct cpt killed_mutants recap = function
       Buffer.clear buf
     in
     Project.on project print_in_file ();
-    let is_killed = match Options.Apply_to_Mutant.get() with
-      | "" -> false
-      | to_apply ->
-	let cmd = Printf.sprintf "frama-c %s -main %s %s" file fct to_apply in
-	(Sys.command cmd) = 0
-    in
-    let k_m_cpt = if is_killed then killed_mutants + 1 else killed_mutants in
     Project.remove ~project ();
-    mutate fct (cpt+1) k_m_cpt ((cpt, is_killed, h) :: recap) t
+    let mutant =
+      {id=cpt; mutation=h; is_proved=Not_tried; nc_detected=Not_tried;
+       cw_detected=Not_tried} in
+    let is_proved =
+      let pattern =
+	"\\[wp\\] Proved goals:[ ]*\\([0-9]*\\)[ ]*\\/[ ]*\\([0-9]*\\)" in
+      let sed_cmd = Printf.sprintf "sed 's/%s/[ \\1 -eq \\2 ]/'" pattern in
+      let cmd =
+	Printf.sprintf "frama-c %s -wp | grep Proved | $(%s)" file sed_cmd in
+      (Sys.command cmd) = 0
+    in
+    let mutant = { mutant with is_proved = Verdict is_proved } in
+    let mutant, ncd, cwd =
+      if is_proved then mutant, ncd, cwd
+      else
+	begin
+	  Mut_options.Self.feedback ~dkey "not proved";
+	  let nc_detected =
+	    let cmd =
+	      Printf.sprintf
+		"frama-c %s -main %s -rte -then -stady | grep Counter-example"
+		file fct in
+	    (Sys.command cmd) = 0
+	  in
+	  let mutant = { mutant with nc_detected = Verdict nc_detected } in
+	  if nc_detected then mutant, ncd+1, cwd
+	  else
+	    begin
+	      Mut_options.Self.feedback ~dkey "no NC detected";
+	      let cw_detected =
+		let on_int already_detected i =
+		  let cmd =
+		    Printf.sprintf
+		      "frama-c %s -main %s -rte -then -stady \
+		       -stady-spec-insuf %i | grep Counter-example"
+		      file fct i in
+		  already_detected || (Sys.command cmd) = 0
+		in
+		let l = Mut_options.Contract_weakness_detection.get() in
+		List.fold_left on_int false l
+	      in
+	      let mutant = { mutant with cw_detected = Verdict cw_detected } in
+	      if cw_detected then mutant, ncd, cwd+1
+	      else mutant, ncd, cwd
+	    end
+	end
+    in
+    Mut_options.Self.feedback ~dkey "%a" pp_mutant mutant;
+    mutate fct (cpt+1) ncd cwd (mutant :: recap) t
 
 
 let run() =
-  if Options.Enabled.get() then
+  if Mut_options.Enabled.get() then
     let funcname = Kernel_function.get_name (fst (Globals.entry_point())) in
     let g = new gatherer funcname in
     Visitor.visitFramacFile (g :> Visitor.frama_c_inplace) (Ast.get());
     let mutations = g#get_mutations() in
     let n_mutations = List.length mutations in
-    Options.Self.feedback ~dkey:Options.dkey_progress "%i mutants" n_mutations;
-    let killed_mutants_cpt, recap = mutate funcname 0 0 [] mutations in
-    let dkey = Options.dkey_report in
-    Options.Self.result ~dkey "|      | Killed |   Not  |";
-    let on_mutant (i,killed,m) = match killed with
-      | true ->
-	 Options.Self.result ~dkey "| %4i |   X    |        | %a" i pp_mut m;
-	 Options.Self.result ~dkey "--------------------------"
-      | false ->
-	 Options.Self.result ~dkey "| %4i |        |   X    | %a" i pp_mut m;
-	 Options.Self.result ~dkey "--------------------------"
+    let dkey = Mut_options.dkey_progress in
+    Mut_options.Self.feedback ~dkey "%i mutants" n_mutations;
+    let ncd_cpt, cwd_cpt, recap = mutate funcname 0 0 0 [] mutations in
+    let dkey = Mut_options.dkey_report in
+    Mut_options.Self.result ~dkey "|      | Proved | NCD | CWD |";
+    let on_mutant m =
+      Mut_options.Self.result ~dkey "%a" pp_mutant m;
+      Mut_options.Self.result ~dkey "--------------------------"
     in
     List.iter on_mutant recap;
-    Options.Self.result ~dkey "%i mutants" n_mutations;
-    Options.Self.result ~dkey "%i mutants killed" killed_mutants_cpt
-	
+    Mut_options.Self.result ~dkey "%i mutants" n_mutations;
+    Mut_options.Self.result ~dkey "%i NC detected" ncd_cpt;
+    Mut_options.Self.result ~dkey "%i CW detected" cwd_cpt
+
 	
 let run =
-  let deps = [Ast.self; Options.Enabled.self] in
+  let deps = [Ast.self; Mut_options.Enabled.self] in
   let f, _self = State_builder.apply_once "MUT" deps run in
   f
     
