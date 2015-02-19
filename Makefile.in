@@ -1,0 +1,81 @@
+#######################
+# Frama-C Environment #
+#######################
+
+ifndef FRAMAC_SHARE
+FRAMAC_SHARE	:= $(shell frama-c -print-share-path)
+endif
+
+ifndef FRAMAC_LIBDIR
+FRAMAC_LIBDIR	:= $(shell frama-c -print-libpath)
+endif
+
+#########################
+# Plug-in configuration #
+#########################
+
+PLUGIN_DIR ?=.
+PLUGIN_NAME := Mutation
+PLUGIN_CMO := local_config options register
+PLUGIN_GUI_CMO 	:= 
+PLUGIN_HAS_MLI:= yes
+PLUGIN_DISTRIBUTED:=no
+#PLUGIN_DISTRIB_EXTERNAL:=Makefile.in configure.ac README.md
+PLUGIN_DEPENDENCIES:=
+PLUGIN_TESTS_DIRS:= search
+PLUGIN_PTESTS_OPTS :=
+PLUGIN_GENERATED:= $(PLUGIN_DIR)/local_config.ml
+
+################
+# Generic part #
+################
+
+include $(FRAMAC_SHARE)/Makefile.dynamic
+
+distclean: clean
+	$(PRINT_RM) "any generated files"
+	$(RM) -rf autom4te.cache
+	$(RM) configure config.status config.log
+	$(RM) -rf .frama-c
+	$(RM) .depend
+
+clean::
+	$(RM) mutant_*.c
+
+#######################
+# Local configuration #
+#######################
+
+MUTATION_VERSION:=$(shell $(SED) -e 's/\\(.*\\)/\\1/' $(PLUGIN_DIR)/VERSION)
+
+$(PLUGIN_DIR)/local_config.ml: $(PLUGIN_DIR)/Makefile.in $(PLUGIN_DIR)/VERSION
+	$(PRINT_MAKING) $@
+	$(RM) $@
+	$(ECHO) "(* This file was automatically generated from $<. Don't edit it. *)" >> $@
+	$(ECHO) "let version = \""$(MUTATION_VERSION)"\"" >> $@
+	$(CHMOD_RO) $@
+
+##########
+# Header #
+##########
+
+headers::
+	@echo "Applying Headers..."
+	headache -c licence/headache_config.txt -h licence/CEA_PROPRIETARY \
+		*.ml *.mli \
+		Makefile.in configure.ac
+
+#####################################
+# Regenerating the Makefile on need #
+#####################################
+
+ifeq ("$(FRAMAC_INTERNAL)","yes")
+CONFIG_STATUS_DIR:=$(FRAMAC_SRC)
+CONFIG_STATUS_DIR_DEP:=
+else
+CONFIG_STATUS_DIR:=$(Mutation_DIR)
+CONFIG_STATUS_DIR_DEP:=$(CONFIG_STATUS_DIR)/config.status
+endif
+
+$(Mutation_DIR)/Makefile: $(Mutation_DIR)/Makefile.in $(CONFIG_STATUS_DIR_DEP)
+	cd $(CONFIG_STATUS_DIR) && ./config.status --file $@
