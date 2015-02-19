@@ -10,9 +10,11 @@ m4_define([FRAMAC_SHARE],
 
 m4_ifndef([FRAMAC_M4_MACROS], [m4_include(FRAMAC_SHARE/configure.ac)])
 
-check_plugin(Mutation,PLUGIN_RELATIVE_PATH(plugin_file),
+check_plugin(mutation,PLUGIN_RELATIVE_PATH(plugin_file),
 	     [support for Mutation plug-in],yes,yes)
 
+plugin_require(mutation,StaDy)
+plugin_require(mutation,Inline)
 check_plugin_dependencies
 
 # Check Frama-C version

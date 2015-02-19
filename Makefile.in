@@ -21,10 +21,18 @@ PLUGIN_GUI_CMO 	:=
 PLUGIN_HAS_MLI:= yes
 PLUGIN_DISTRIBUTED:=no
 #PLUGIN_DISTRIB_EXTERNAL:=Makefile.in configure.ac README.md
-PLUGIN_DEPENDENCIES:=
+PLUGIN_DEPENDENCIES:=StaDy Inline
 PLUGIN_TESTS_DIRS:= search
 PLUGIN_PTESTS_OPTS :=
 PLUGIN_GENERATED:= $(PLUGIN_DIR)/local_config.ml
+
+$(PLUGIN_DIR)/tests/test_config: $(PLUGIN_DIR)/tests/test_config.in
+	$(PRINT_MAKING) $@
+	$(RM) $@
+	$(SED) -e "s|__PLUGIN_PATH__|`frama-c-config -print-plugin-path`|g" $^ > $@
+	$(CHMOD_RO) $@
+
+tests:: $(PLUGIN_DIR)/tests/test_config
 
 ################
 # Generic part #
