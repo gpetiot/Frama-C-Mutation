@@ -191,12 +191,11 @@ let pp_mutant fmt m =
 		 pp_mutation m.mutation
 
 
-let rec mutate fct cpt ncd cwd recap = function
-  | [] -> ncd, cwd, recap
-  | _ when Mut_options.Only.get() <> -1 && Mut_options.Only.get() < cpt ->
-     ncd, cwd, recap
+let rec mutate fct cpt recap = function
+  | [] -> recap
+  | _ when Mut_options.Only.get() <> -1 && Mut_options.Only.get() < cpt -> recap
   | _::t when Mut_options.Only.get() <> -1 && Mut_options.Only.get() > cpt ->
-    mutate fct (cpt+1) ncd cwd recap t
+    mutate fct (cpt+1) recap t
   | h::t ->
     let file = "mutant_" ^ (string_of_int cpt) ^ ".c" in
     let dkey = Mut_options.dkey_progress in
@@ -236,8 +235,8 @@ let rec mutate fct cpt ncd cwd recap = function
       (Sys.command cmd) = 0
     in
     let mutant = { mutant with is_proved = Verdict is_proved } in
-    let mutant, ncd, cwd =
-      if is_proved then mutant, ncd, cwd
+    let mutant =
+      if is_proved then mutant
       else
 	begin
 	  Mut_options.Self.feedback ~dkey "not proved";
@@ -249,7 +248,7 @@ let rec mutate fct cpt ncd cwd recap = function
 	    (Sys.command cmd) = 0
 	  in
 	  let mutant = { mutant with nc_detected = Verdict nc_detected } in
-	  if nc_detected then mutant, ncd+1, cwd
+	  if nc_detected then mutant
 	  else
 	    begin
 	      Mut_options.Self.feedback ~dkey "no NC detected";
@@ -266,13 +265,13 @@ let rec mutate fct cpt ncd cwd recap = function
 		List.fold_left on_int false l
 	      in
 	      let mutant = { mutant with cw_detected = Verdict cw_detected } in
-	      if cw_detected then mutant, ncd, cwd+1
-	      else mutant, ncd, cwd
+	      if cw_detected then mutant
+	      else mutant
 	    end
 	end
     in
     Mut_options.Self.feedback ~dkey "%a" pp_mutant mutant;
-    mutate fct (cpt+1) ncd cwd (mutant :: recap) t
+    mutate fct (cpt+1) (mutant :: recap) t
 
 
 let run() =
@@ -284,15 +283,20 @@ let run() =
     let n_mutations = List.length mutations in
     let dkey = Mut_options.dkey_progress in
     Mut_options.Self.feedback ~dkey "%i mutants" n_mutations;
-    let ncd_cpt, cwd_cpt, recap = mutate funcname 0 0 0 [] mutations in
+    let recap = mutate funcname 0 [] mutations in
     let dkey = Mut_options.dkey_report in
     Mut_options.Self.result ~dkey "|      | Proved | NCD | CWD |";
-    let on_mutant m =
+    let on_mutant (wp,ncd,cwd) m =
+      let wp = match m.is_proved with Verdict true -> wp+1 | _ -> wp in
+      let ncd =	match m.nc_detected with Verdict true -> ncd+1 | _ -> ncd in
+      let cwd = match m.cw_detected with Verdict true -> cwd+1 | _ -> cwd in
       Mut_options.Self.result ~dkey "%a" pp_mutant m;
-      Mut_options.Self.result ~dkey "--------------------------"
+      Mut_options.Self.result ~dkey "--------------------------";
+      wp, ncd, cwd
     in
-    List.iter on_mutant recap;
+    let proved_cpt, ncd_cpt, cwd_cpt = List.fold_left on_mutant (0,0,0) recap in
     Mut_options.Self.result ~dkey "%i mutants" n_mutations;
+    Mut_options.Self.result ~dkey "%i proved" proved_cpt;
     Mut_options.Self.result ~dkey "%i NC detected" ncd_cpt;
     Mut_options.Self.result ~dkey "%i CW detected" cwd_cpt
 
