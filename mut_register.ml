@@ -133,7 +133,8 @@ class mutation_visitor prj mut = object
   method! vbehavior bhv = match mut with
   | Mut_Post m ->
     let l = List.filter (fun (_,p) -> p.ip_id <> m.ip_id) bhv.b_post_cond in
-    Cil.ChangeDoChildrenPost (bhv, fun b -> {b with b_post_cond = l})
+    (*Cil.ChangeDoChildrenPost (bhv, fun b -> {b with b_post_cond = l})*)
+    Cil.ChangeTo {bhv with b_post_cond = l}
   | _ -> Cil.DoChildren
 
   method! vcode_annot ca = match ca.annot_content, mut with
