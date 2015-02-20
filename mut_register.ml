@@ -29,10 +29,10 @@ let pp_mutation fmt = function
 
 
 let other_binops = function
-  | PlusA -> [MinusA;Mult;Div;Mod]
-  | MinusA -> [PlusA;Mult;Div;Mod]
-  | Mult -> [Div;Mod;PlusA;MinusA]
-  | Div -> [Mult;Mod;PlusA;MinusA]
+  | PlusA -> [MinusA;Mult]
+  | MinusA -> [PlusA;Mult]
+  | Mult -> [PlusA;MinusA]
+  | Div -> [Mult;PlusA;MinusA;Mod]
   | Mod -> [Mult;Div;PlusA;MinusA]
   | LAnd -> [LOr]
   | LOr -> [LAnd]
@@ -44,13 +44,13 @@ let other_binops = function
   | Ne -> [Eq]
   | _ -> assert false
 
-let other_relation = function
-  | Rlt -> Rle
-  | Rgt -> Rge
-  | Rle -> Rlt
-  | Rge -> Rgt
-  | Req -> Rneq
-  | Rneq -> Req
+let other_relations = function
+  | Rlt -> [Rgt;Rle;Rge;Req;Rneq]
+  | Rgt -> [Rlt;Rle;Rge;Req;Rneq]
+  | Rle -> [Rlt;Rgt;Rge;Req;Rneq]
+  | Rge -> [Rlt;Rgt;Rle;Req;Rneq]
+  | Req -> [Rneq]
+  | Rneq -> [Req]
 
 
 let loc_ok (loc,_) =
@@ -86,9 +86,13 @@ class gatherer funcname = object(self)
   | _ -> Cil.DoChildren
 
   method! vpredicate_named p = match p.content with
+  | Pexists(_,{content=Pand(_,y)})
+  | Pforall(_,{content=Pimplies(_,y)}) ->
+    ignore (self#vpredicate_named y);
+    Cil.SkipChildren
   | Prel(r,_,_) when Mut_options.Mut_Spec.get() && loc_ok p.loc ->
     let add o = self#add (Mut_Prel (r, o, p.loc)) in
-    add (other_relation r);
+    List.iter add (other_relations r);
     Cil.DoChildren
   | Pnot(p2) when Mut_options.Mut_Spec.get() && loc_ok p.loc ->
     self#add (Mut_Pnot (p, p2, p.loc));
@@ -184,7 +188,7 @@ type mutant = {
 }
 
 let pp_mutant fmt m =
-  Format.fprintf fmt "| %4i |    %a  |  %a  |  %a  | %a"
+  Format.fprintf fmt "| %4i |    %a   |  %a  |  %a  | %a"
 		 m.id
 		 pp_verdict m.is_proved
 		 pp_verdict m.nc_detected
