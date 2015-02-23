@@ -291,19 +291,29 @@ let run() =
     let recap = mutate funcname 0 [] mutations in
     let dkey = Mut_options.dkey_report in
     Mut_options.Self.result ~dkey "|      | Proved | NCD | CWD |";
-    let on_mutant (wp,ncd,cwd) m =
-      let wp = match m.is_proved with Verdict true -> wp+1 | _ -> wp in
-      let ncd =	match m.nc_detected with Verdict true -> ncd+1 | _ -> ncd in
-      let cwd = match m.cw_detected with Verdict true -> cwd+1 | _ -> cwd in
+    let on_mutant (wp,ncd,cwd,idk) m =
+      let wp, ncd, cwd, idk =
+	match m.is_proved, m.nc_detected, m.cw_detected with
+	| Verdict true, Not_tried, Not_tried -> m::wp, ncd, cwd, idk
+	| Verdict false, Verdict true, Not_tried -> wp, m::ncd, cwd, idk
+	| Verdict false, Verdict false, Verdict true -> wp, ncd, m::cwd, idk
+	| Verdict false, Verdict false, Verdict false -> wp, ncd, cwd, m::idk
+	| _ -> assert false
+      in
       Mut_options.Self.result ~dkey "%a" pp_mutant m;
       Mut_options.Self.result ~dkey "--------------------------";
-      wp, ncd, cwd
+      wp, ncd, cwd, idk
     in
-    let proved_cpt, ncd_cpt, cwd_cpt = List.fold_left on_mutant (0,0,0) recap in
+    let pp fmt x =
+      let pp_aux fmt x = Format.fprintf fmt "%i" x.id in
+      Format.fprintf fmt "(%a)" (Pretty_utils.pp_list ~sep:"," pp_aux) x
+    in
+    let proved, ncd, cwd, idk = List.fold_left on_mutant ([],[],[],[]) recap in
     Mut_options.Self.result ~dkey "%i mutants" n_mutations;
-    Mut_options.Self.result ~dkey "%i proved" proved_cpt;
-    Mut_options.Self.result ~dkey "%i NC detected" ncd_cpt;
-    Mut_options.Self.result ~dkey "%i CW detected" cwd_cpt
+    Mut_options.Self.result ~dkey "%i proved %a" (List.length proved) pp proved;
+    Mut_options.Self.result ~dkey "%i NC detected %a" (List.length ncd) pp ncd;
+    Mut_options.Self.result ~dkey "%i CW detected %a" (List.length cwd) pp cwd;
+    Mut_options.Self.result ~dkey "%i unknown %a" (List.length idk) pp idk
 
 	
 let run =
