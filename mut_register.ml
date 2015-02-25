@@ -228,6 +228,7 @@ let rec mutate fct cpt recap = function
     in
     Project.on project print_in_file ();
     Project.remove ~project ();
+    let log_file = "__mut.log" in
     let mutant =
       {id=cpt; mutation=h; is_proved=Not_tried; nc_detected=Not_tried;
        cw_detected=Not_tried} in
@@ -236,7 +237,8 @@ let rec mutate fct cpt recap = function
 	"\\[wp\\] Proved goals:[ ]*\\([0-9]*\\)[ ]*\\/[ ]*\\([0-9]*\\)" in
       let sed_cmd = Printf.sprintf "sed 's/%s/[ \\1 -eq \\2 ]/'" pattern in
       let cmd =
-	Printf.sprintf "frama-c %s -wp | grep Proved | $(%s)" file sed_cmd in
+	Printf.sprintf "frama-c %s -wp | tee -a %s | grep Proved | $(%s)"
+		       file log_file sed_cmd in
       (Sys.command cmd) = 0
     in
     let mutant = { mutant with is_proved = Verdict is_proved } in
@@ -248,8 +250,9 @@ let rec mutate fct cpt recap = function
 	  let nc_detected =
 	    let cmd =
 	      Printf.sprintf
-		"frama-c %s -main %s -rte -then -stady | grep Counter-example"
-		file fct in
+		"frama-c %s -main %s -rte -rte-annotations -then -stady \
+		 | tee -a %s | grep Counter-example"
+		file fct log_file in
 	    (Sys.command cmd) = 0
 	  in
 	  let mutant = { mutant with nc_detected = Verdict nc_detected } in
@@ -261,9 +264,9 @@ let rec mutate fct cpt recap = function
 		let on_int already_detected i =
 		  let cmd =
 		    Printf.sprintf
-		      "frama-c %s -main %s -rte -then -stady \
-		       -stady-spec-insuf %i | grep Counter-example"
-		      file fct i in
+		      "frama-c %s -main %s -rte -rte-annotations -then -stady \
+		       -stady-spec-insuf %i | tee -a %s | grep Counter-example"
+		      file fct i log_file in
 		  already_detected || (Sys.command cmd) = 0
 		in
 		let l = Mut_options.Contract_weakness_detection.get() in
@@ -290,6 +293,11 @@ let run() =
     Mut_options.Self.feedback ~dkey "%i mutants" n_mutations;
     let recap = mutate funcname 0 [] mutations in
     let dkey = Mut_options.dkey_report in
+    let pp fmt x =
+      let pp_aux fmt x = Format.fprintf fmt "%i" x.id in
+      Format.fprintf fmt "(%a)" (Pretty_utils.pp_list ~sep:"," pp_aux) x
+    in
+    (* Report *)
     Mut_options.Self.result ~dkey "|      | Proved | NCD | CWD |";
     let on_mutant (wp,ncd,cwd,idk) m =
       let wp, ncd, cwd, idk =
@@ -303,10 +311,6 @@ let run() =
       Mut_options.Self.result ~dkey "%a" pp_mutant m;
       Mut_options.Self.result ~dkey "--------------------------";
       wp, ncd, cwd, idk
-    in
-    let pp fmt x =
-      let pp_aux fmt x = Format.fprintf fmt "%i" x.id in
-      Format.fprintf fmt "(%a)" (Pretty_utils.pp_list ~sep:"," pp_aux) x
     in
     let proved, ncd, cwd, idk = List.fold_left on_mutant ([],[],[],[]) recap in
     Mut_options.Self.result ~dkey "%i mutants" n_mutations;
