@@ -317,7 +317,15 @@ let run() =
     Mut_options.Self.result ~dkey "%i proved %a" (List.length proved) pp proved;
     Mut_options.Self.result ~dkey "%i NC detected %a" (List.length ncd) pp ncd;
     Mut_options.Self.result ~dkey "%i CW detected %a" (List.length cwd) pp cwd;
-    Mut_options.Self.result ~dkey "%i unknown %a" (List.length idk) pp idk
+    Mut_options.Self.result ~dkey "%i unknown %a" (List.length idk) pp idk;
+    (* LaTeX output *)
+    let tex_file = "__mut.tex" in
+    let out_file = open_out tex_file in
+    Printf.fprintf out_file "%s & %i & %i & %i & %i & %i \\\\"
+		   funcname n_mutations (List.length proved) (List.length ncd)
+		   (List.length cwd) (List.length idk);
+    flush out_file;
+    close_out out_file
 
 	
 let run =
