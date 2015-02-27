@@ -125,6 +125,8 @@ class gatherer funcname = object(self)
   method! vglob_aux glob = match glob with
   | GFun (f,_) when f.svar.vname = (funcname ^ "_precond") -> Cil.SkipChildren
   | _ -> Cil.DoChildren
+
+  method! vassigns _ = Cil.SkipChildren
 end
 
 
