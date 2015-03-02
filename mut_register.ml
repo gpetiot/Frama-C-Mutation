@@ -187,14 +187,22 @@ type mutant = {
   is_proved : verdict;
   nc_detected : verdict;
   cw_detected : verdict;
+  time : CalendarLib.Ftime.Period.t option;
 }
 
+let pp_time fmt = function
+  | None -> Format.fprintf fmt "-"
+  | Some t ->
+     let length = CalendarLib.Ftime.Period.length t in
+     Format.fprintf fmt "%f" length
+
 let pp_mutant fmt m =
-  Format.fprintf fmt "| %4i |    %a   |  %a  |  %a  | %a"
+  Format.fprintf fmt "| %4i |    %a   |  %a  |  %a  | %a | %a"
 		 m.id
 		 pp_verdict m.is_proved
 		 pp_verdict m.nc_detected
 		 pp_verdict m.cw_detected
+		 pp_time m.time
 		 pp_mutation m.mutation
 
 
@@ -233,7 +241,7 @@ let rec mutate fct cpt recap = function
     let log_file = "__mut.log" in
     let mutant =
       {id=cpt; mutation=h; is_proved=Not_tried; nc_detected=Not_tried;
-       cw_detected=Not_tried} in
+       cw_detected=Not_tried; time=None} in
     let is_proved =
       let pattern =
 	"\\[wp\\] Proved goals:[ ]*\\([0-9]*\\)[ ]*\\/[ ]*\\([0-9]*\\)" in
@@ -248,6 +256,7 @@ let rec mutate fct cpt recap = function
       if is_proved then mutant
       else
 	begin
+	  let begin_time = CalendarLib.Ftime.now() in
 	  Mut_options.Self.feedback ~dkey "not proved";
 	  let nc_detected =
 	    let cmd =
@@ -257,8 +266,12 @@ let rec mutate fct cpt recap = function
 		file fct log_file in
 	    (Sys.command cmd) = 0
 	  in
+	  let end_time = CalendarLib.Ftime.now() in
+	  let diff_time = CalendarLib.Ftime.sub end_time begin_time in
 	  let mutant = { mutant with nc_detected = Verdict nc_detected } in
-	  if nc_detected then mutant
+	  if nc_detected then
+	    let mutant = { mutant with time = Some diff_time } in
+	    mutant
 	  else
 	    begin
 	      Mut_options.Self.feedback ~dkey "no NC detected";
@@ -274,8 +287,12 @@ let rec mutate fct cpt recap = function
 		let l = Mut_options.Contract_weakness_detection.get() in
 		List.fold_left on_int false l
 	      in
+	      let end_time = CalendarLib.Ftime.now() in
+	      let diff_time = CalendarLib.Ftime.sub end_time begin_time in
 	      let mutant = { mutant with cw_detected = Verdict cw_detected } in
-	      if cw_detected then mutant
+	      if cw_detected then
+		let mutant = { mutant with time = Some diff_time } in
+		mutant
 	      else mutant
 	    end
 	end
@@ -301,7 +318,7 @@ let run() =
     in
     (* Report *)
     Mut_options.Self.result ~dkey "|      | Proved | NCD | CWD |";
-    let on_mutant (wp,ncd,cwd,idk) m =
+    let on_mutant (wp,ncd,cwd,idk,max_t,sum_t,time_cpt) m =
       let wp, ncd, cwd, idk =
 	match m.is_proved, m.nc_detected, m.cw_detected with
 	| Verdict true, Not_tried, Not_tried -> m::wp, ncd, cwd, idk
@@ -310,22 +327,35 @@ let run() =
 	| Verdict false, Verdict false, Verdict false -> wp, ncd, cwd, m::idk
 	| _ -> assert false
       in
+      let max_time = match m.time with
+	| Some t when CalendarLib.Ftime.Period.length t > max_t ->
+	   CalendarLib.Ftime.Period.length t
+	| _ -> max_t
+      in
+      let sum_time,time_cpt = match m.time with
+	| Some t -> sum_t +. CalendarLib.Ftime.Period.length t, time_cpt+1
+	| _ -> sum_t, time_cpt
+      in
       Mut_options.Self.result ~dkey "%a" pp_mutant m;
       Mut_options.Self.result ~dkey "--------------------------";
-      wp, ncd, cwd, idk
+      wp, ncd, cwd, idk, max_time, sum_time, time_cpt
     in
-    let proved, ncd, cwd, idk = List.fold_left on_mutant ([],[],[],[]) recap in
+    let proved, ncd, cwd, idk, max_time, sum_time, time_cpt =
+      List.fold_left on_mutant ([],[],[],[],0.0,0.0,0) recap in
+    let mean_time = sum_time /. (float_of_int time_cpt) in
     Mut_options.Self.result ~dkey "%i mutants" n_mutations;
     Mut_options.Self.result ~dkey "%i proved %a" (List.length proved) pp proved;
     Mut_options.Self.result ~dkey "%i NC detected %a" (List.length ncd) pp ncd;
     Mut_options.Self.result ~dkey "%i CW detected %a" (List.length cwd) pp cwd;
     Mut_options.Self.result ~dkey "%i unknown %a" (List.length idk) pp idk;
+    Mut_options.Self.result ~dkey "%f max time" max_time;
+    Mut_options.Self.result ~dkey "%f mean time" mean_time;
     (* LaTeX output *)
     let tex_file = "__mut.tex" in
     let out_file = open_out tex_file in
-    Printf.fprintf out_file "%s & %i & %i & %i & %i & %i \\\\"
+    Printf.fprintf out_file "%s & %i & %i & %i & %i & %i & %f & %f \\\\"
 		   funcname n_mutations (List.length proved) (List.length ncd)
-		   (List.length cwd) (List.length idk);
+		   (List.length cwd) (List.length idk) max_time mean_time;
     flush out_file;
     close_out out_file
 
