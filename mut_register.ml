@@ -343,19 +343,30 @@ let run() =
     let proved, ncd, cwd, idk, max_time, sum_time, time_cpt =
       List.fold_left on_mutant ([],[],[],[],0.0,0.0,0) recap in
     let mean_time = sum_time /. (float_of_int time_cpt) in
+    let ncd_efficiency = (float_of_int ((List.length ncd) * 100)) /.
+			   (float_of_int ((n_mutations - (List.length proved))))
+    in
+    let ncd_cwd_efficiency =
+      (float_of_int (((List.length ncd) + (List.length cwd)) * 100)) /.
+	(float_of_int ((n_mutations - (List.length proved))))
+    in
     Mut_options.Self.result ~dkey "%i mutants" n_mutations;
     Mut_options.Self.result ~dkey "%i proved %a" (List.length proved) pp proved;
     Mut_options.Self.result ~dkey "%i NC detected %a" (List.length ncd) pp ncd;
     Mut_options.Self.result ~dkey "%i CW detected %a" (List.length cwd) pp cwd;
     Mut_options.Self.result ~dkey "%i unknown %a" (List.length idk) pp idk;
+    Mut_options.Self.result ~dkey "NCD efficiency %f%%" ncd_efficiency;
+    Mut_options.Self.result ~dkey "NCD+CWD efficiency %f%%" ncd_cwd_efficiency;
     Mut_options.Self.result ~dkey "%f max time" max_time;
     Mut_options.Self.result ~dkey "%f mean time" mean_time;
     (* LaTeX output *)
     let tex_file = "__mut.tex" in
     let out_file = open_out tex_file in
-    Printf.fprintf out_file "%s & %i & %i & %i & %i & %i & %f & %f \\\\"
+    Printf.fprintf out_file
+		   "%s & %i & %i & %i & %i & %i & %f & %f & %f & %f \\\\"
 		   funcname n_mutations (List.length proved) (List.length ncd)
-		   (List.length cwd) (List.length idk) max_time mean_time;
+		   (List.length cwd) (List.length idk) ncd_efficiency
+		   ncd_cwd_efficiency max_time mean_time;
     flush out_file;
     close_out out_file
 
