@@ -187,6 +187,7 @@ type mutant = {
   is_proved : verdict;
   nc_detected : verdict;
   cw_detected : verdict;
+  stady_time : CalendarLib.Ftime.Period.t option;
 }
 
 let pp_time fmt t =
@@ -240,17 +241,17 @@ let rec mutate fct cpt recap = function
     let log_file = "__mut.log" in
     let mutant =
       {id=cpt; mutation=h; is_proved=Not_tried; nc_detected=Not_tried;
-       cw_detected=Not_tried;} in
+       cw_detected=Not_tried; stady_time=None;} in
     let cmd =
       Printf.sprintf
 	"frama-c %s -wp -wp-out . -wp-timeout %i -wp-prover alt-ergo,cvc3 | \
 	 tee -a %s | grep Proved | $(%s)"
 	file timeout log_file sed_cmd in
-    let begin_time = CalendarLib.Ftime.now() in
+    let begin_wp_time = CalendarLib.Ftime.now() in
     let is_proved = (Sys.command cmd) = 0 in
-    let end_time = CalendarLib.Ftime.now() in
-    let diff_time = CalendarLib.Ftime.sub end_time begin_time in
-    let mutant = { mutant with is_proved = Verdict (is_proved, diff_time) } in
+    let end_wp_time = CalendarLib.Ftime.now() in
+    let diff_wp_time = CalendarLib.Ftime.sub end_wp_time begin_wp_time in
+    let mutant = { mutant with is_proved = Verdict (is_proved, diff_wp_time)} in
     let mutant =
       if is_proved then mutant
       else
@@ -262,12 +263,14 @@ let rec mutate fct cpt recap = function
 	       -stady-stop-when-assert-violated -stady-timeout %i | \
 	       tee -a %s | grep Counter-example"
 	      file fct timeout log_file in
-	  let begin_time = CalendarLib.Ftime.now() in
+	  let begin_ncd_time = CalendarLib.Ftime.now() in
 	  let nc_detected = (Sys.command cmd) = 0 in
-	  let end_time = CalendarLib.Ftime.now() in
-	  let diff_time = CalendarLib.Ftime.sub end_time begin_time in
+	  let end_ncd_time = CalendarLib.Ftime.now() in
+	  let diff_ncd_time =
+	    CalendarLib.Ftime.sub end_ncd_time begin_ncd_time in
 	  let mutant =
-	    { mutant with nc_detected = Verdict (nc_detected, diff_time) } in
+	    { mutant with nc_detected = Verdict (nc_detected, diff_ncd_time)} in
+	  let mutant = { mutant with stady_time = Some diff_ncd_time } in
 	  if nc_detected then mutant
 	  else
 	    begin
@@ -283,11 +286,15 @@ let rec mutate fct cpt recap = function
 		already_detected || (Sys.command cmd) = 0
 	      in
 	      let l = Mut_options.Contract_weakness_detection.get() in
-	      let begin_time = CalendarLib.Ftime.now() in
+	      let begin_cwd_time = CalendarLib.Ftime.now() in
 	      let cw_detected =	List.fold_left on_int false l in
-	      let end_time = CalendarLib.Ftime.now() in
-	      let diff_time = CalendarLib.Ftime.sub end_time begin_time in
-	      { mutant with cw_detected = Verdict (cw_detected, diff_time) }
+	      let end_cwd_time = CalendarLib.Ftime.now() in
+	      let diff_cwd_time =
+		CalendarLib.Ftime.sub end_cwd_time begin_cwd_time in
+	      let diff_stady_time =
+		CalendarLib.Ftime.sub end_cwd_time begin_ncd_time in
+	      let mutant = {mutant with stady_time = Some diff_stady_time } in
+	      { mutant with cw_detected = Verdict (cw_detected, diff_cwd_time) }
 	    end
 	end
     in
@@ -299,14 +306,14 @@ let data_of o l ok_max_t ok_sum_t ok_nb_t ko_max_t ko_sum_t ko_nb_t = function
   | Not_tried -> (l, ok_max_t, ok_sum_t, ok_nb_t, ko_max_t, ko_sum_t, ko_nb_t)
   | Verdict (true, t) ->
      o::l,
-     (if CalendarLib.Ftime.Period.length t > ok_max_t then
-	CalendarLib.Ftime.Period.length t else ok_max_t),
+     (if CalendarLib.Ftime.Period.length t < ok_max_t then
+	ok_max_t else CalendarLib.Ftime.Period.length t),
      ok_sum_t +. CalendarLib.Ftime.Period.length t,
      ok_nb_t + 1, ko_max_t, ko_sum_t, ko_nb_t
   | Verdict (false, t) ->
      l, ok_max_t, ok_sum_t, ok_nb_t,
-     (if CalendarLib.Ftime.Period.length t > ko_max_t then
-	CalendarLib.Ftime.Period.length t else ko_max_t),
+     (if CalendarLib.Ftime.Period.length t < ko_max_t then
+	ko_max_t else CalendarLib.Ftime.Period.length t),
      ko_sum_t +. CalendarLib.Ftime.Period.length t, ko_nb_t + 1
 
 
@@ -345,7 +352,8 @@ let run() =
 	   ncd, ncd_ok_max_t, ncd_ok_sum_t, ncd_ok_nb_t,
 	   ncd_ko_max_t, ncd_ko_sum_t, ncd_ko_nb_t,
 	   cwd, cwd_ok_max_t, cwd_ok_sum_t, cwd_ok_nb_t,
-	   cwd_ko_max_t, cwd_ko_sum_t, cwd_ko_nb_t) m =
+	   cwd_ko_max_t, cwd_ko_sum_t, cwd_ko_nb_t,
+	   sd_max_t, sd_sum_t, sd_nb_t) m =
       let wp, wp_ok_max_t, wp_ok_sum_t, wp_ok_nb_t,
 	  wp_ko_max_t, wp_ko_sum_t, wp_ko_nb_t =
 	data_of m wp wp_ok_max_t wp_ok_sum_t wp_ok_nb_t
@@ -358,6 +366,15 @@ let run() =
 	  cwd_ko_max_t, cwd_ko_sum_t, cwd_ko_nb_t =
 	data_of m cwd cwd_ok_max_t cwd_ok_sum_t cwd_ok_nb_t
 		cwd_ko_max_t cwd_ko_sum_t cwd_ko_nb_t m.cw_detected in
+      let sd_max_t, sd_sum_t, sd_nb_t =
+	match m.stady_time with
+	| None -> sd_max_t, sd_sum_t, sd_nb_t
+	| Some t ->
+	   (if CalendarLib.Ftime.Period.length t < sd_max_t then
+	      sd_max_t else CalendarLib.Ftime.Period.length t),
+	   sd_sum_t +. CalendarLib.Ftime.Period.length t,
+	   sd_nb_t+1
+      in
       Mut_options.Self.result ~dkey "%a" pp_mutant m;
       Mut_options.Self.result ~dkey "--------------------------";
       wp, wp_ok_max_t, wp_ok_sum_t, wp_ok_nb_t,
@@ -365,18 +382,22 @@ let run() =
       ncd, ncd_ok_max_t, ncd_ok_sum_t, ncd_ok_nb_t,
       ncd_ko_max_t, ncd_ko_sum_t, ncd_ko_nb_t,
       cwd, cwd_ok_max_t, cwd_ok_sum_t, cwd_ok_nb_t,
-      cwd_ko_max_t, cwd_ko_sum_t, cwd_ko_nb_t
+      cwd_ko_max_t, cwd_ko_sum_t, cwd_ko_nb_t,
+      sd_max_t, sd_sum_t, sd_nb_t
     in
     let wp, wp_ok_max_t, wp_ok_sum_t, wp_ok_nb_t,
       wp_ko_max_t, wp_ko_sum_t, wp_ko_nb_t,
       ncd, ncd_ok_max_t, ncd_ok_sum_t, ncd_ok_nb_t,
       ncd_ko_max_t, ncd_ko_sum_t, ncd_ko_nb_t,
       cwd, cwd_ok_max_t, cwd_ok_sum_t, cwd_ok_nb_t,
-      cwd_ko_max_t, cwd_ko_sum_t, cwd_ko_nb_t =
+      cwd_ko_max_t, cwd_ko_sum_t, cwd_ko_nb_t,
+      sd_max_t, sd_sum_t, sd_nb_t =
+      (* neutral element of max is NaN *)
       List.fold_left on_mutant
-		     ([],diff_t,diff_t,1,0.,0.,0,
-		      [],0.,0.,0,0.,0.,0,
-		      [],0.,0.,0,0.,0.,0)
+		     ([],diff_t,diff_t,1,nan,0.,0,
+		      [],nan,0.,0,nan,0.,0,
+		      [],nan,0.,0,nan,0.,0,
+		      nan,0.,0)
 		     recap in
     let wp_ok_mean_t = wp_ok_sum_t /. (float_of_int wp_ok_nb_t) in
     let wp_ko_mean_t = wp_ko_sum_t /. (float_of_int wp_ko_nb_t) in
@@ -384,6 +405,7 @@ let run() =
     let ncd_ko_mean_t = ncd_ko_sum_t /. (float_of_int ncd_ko_nb_t) in
     let cwd_ok_mean_t = cwd_ok_sum_t /. (float_of_int cwd_ok_nb_t) in
     let cwd_ko_mean_t = cwd_ko_sum_t /. (float_of_int cwd_ko_nb_t) in
+    let sd_mean_t = sd_sum_t /. (float_of_int sd_nb_t) in
     let ncd_efficiency =
       (float_of_int ((List.length ncd) * 100)) /.
 	(float_of_int ((n_mutations - (List.length wp)))) in
@@ -416,7 +438,9 @@ let run() =
 		    %i & %f & %f & %f & %f & \
 		    %f & \
 		    %i & %f & %f & %f & %f & \
-		    %f & %f & \
+		    %f & \
+		    %f & %f \
+		    %f & \
 		    %i \\\\ \n"
 		   funcname n_mutations
 		   (List.length wp)
@@ -426,7 +450,9 @@ let run() =
 		   ncd_efficiency
 		   (List.length cwd)
 		   cwd_ok_max_t cwd_ok_mean_t cwd_ko_max_t cwd_ko_mean_t
-		   cwd_efficiency ncd_cwd_efficiency
+		   cwd_efficiency
+		   sd_max_t sd_mean_t
+		   ncd_cwd_efficiency
 		   (List.length idk);
     flush out_file;
     close_out out_file;
@@ -439,7 +465,9 @@ let run() =
 		    %i  %f  %f  %f  %f  \
 		    %f  \
 		    %i  %f  %f  %f  %f  \
+		    %f  \
 		    %f  %f  \
+		    %f  \
 		    %i  \n"
 		   funcname n_mutations
 		   (List.length wp)
@@ -449,7 +477,9 @@ let run() =
 		   ncd_efficiency
 		   (List.length cwd)
 		   cwd_ok_max_t cwd_ok_mean_t cwd_ko_max_t cwd_ko_mean_t
-		   cwd_efficiency ncd_cwd_efficiency
+		   cwd_efficiency
+		   sd_max_t sd_mean_t
+		   ncd_cwd_efficiency
 		   (List.length idk);
     flush out_file;
     close_out out_file
