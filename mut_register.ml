@@ -417,7 +417,7 @@ let run() =
 		    %f & \
 		    %i & %f & %f & %f & %f & \
 		    %f & %f & \
-		    %i \\\\ \\n"
+		    %i \\\\ \n"
 		   funcname n_mutations
 		   (List.length wp)
 		   wp_ok_max_t wp_ok_mean_t wp_ko_max_t wp_ko_mean_t
