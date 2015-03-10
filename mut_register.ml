@@ -389,7 +389,7 @@ let run() =
 	(float_of_int ((n_mutations - (List.length wp)))) in
     let cwd_efficiency =
       (float_of_int ((List.length cwd) * 100)) /.
-	(float_of_int ((n_mutations - (List.length wp) - (List.length cwd)))) in
+	(float_of_int ((n_mutations - (List.length wp) - (List.length ncd)))) in
     let ncd_cwd_efficiency =
       (float_of_int (((List.length ncd) + (List.length cwd)) * 100)) /.
 	(float_of_int ((n_mutations - (List.length wp))))
