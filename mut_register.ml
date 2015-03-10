@@ -202,7 +202,8 @@ let pp_mutant fmt m =
 		 pp_verdict m.cw_detected
 		 pp_mutation m.mutation
 
-let timeout = 40
+let wp_timeout = 40
+let stady_timeout = 5
 let pattern = "\\[wp\\] Proved goals:[ ]*\\([0-9]*\\)[ ]*\\/[ ]*\\([0-9]*\\)"
 let sed_cmd = Printf.sprintf "sed 's/%s/[ \\1 -eq \\2 ]/'" pattern
 
@@ -246,7 +247,7 @@ let rec mutate fct cpt recap = function
       Printf.sprintf
 	"frama-c %s -wp -wp-out . -wp-timeout %i -wp-prover alt-ergo,cvc3 | \
 	 tee -a %s | grep Proved | $(%s)"
-	file timeout log_file sed_cmd in
+	file wp_timeout log_file sed_cmd in
     let begin_wp_time = CalendarLib.Ftime.now() in
     let is_proved = (Sys.command cmd) = 0 in
     let end_wp_time = CalendarLib.Ftime.now() in
@@ -262,7 +263,7 @@ let rec mutate fct cpt recap = function
 	      "frama-c %s -main %s -rte -rte-locations c,acsl -then -stady \
 	       -stady-stop-when-assert-violated -stady-timeout %i | \
 	       tee -a %s | grep Counter-example"
-	      file fct timeout log_file in
+	      file fct stady_timeout log_file in
 	  let begin_ncd_time = CalendarLib.Ftime.now() in
 	  let nc_detected = (Sys.command cmd) = 0 in
 	  let end_ncd_time = CalendarLib.Ftime.now() in
@@ -282,7 +283,7 @@ let rec mutate fct cpt recap = function
 		     -stady -stady-stop-when-assert-violated \
 		     -stady-timeout %i -stady-spec-insuf %i \
 		     -stady-inv-preserv | tee -a %s | grep Counter-example"
-		    file fct timeout i log_file in
+		    file fct stady_timeout i log_file in
 		already_detected || (Sys.command cmd) = 0
 	      in
 	      let l = Mut_options.Contract_weakness_detection.get() in
@@ -338,7 +339,7 @@ let run() =
       Printf.sprintf
 	"frama-c %s -wp -wp-out . -wp-timeout %i -wp-prover alt-ergo,cvc3 | \
 	 grep Proved | $(%s)"
-	filename timeout sed_cmd in
+	filename wp_timeout sed_cmd in
     let begin_time = CalendarLib.Ftime.now() in
     assert((Sys.command cmd) = 0);
     let end_time = CalendarLib.Ftime.now() in
