@@ -278,7 +278,7 @@ let rec mutate fct cpt recap = function
 		    "frama-c %s -main %s -rte -rte-locations c,acsl -then \
 		     -stady -stady-stop-when-assert-violated \
 		     -stady-timeout %i -stady-spec-insuf %i \
-		     -stady-inv-preserved | tee -a %s | grep Counter-example"
+		     -stady-inv-preserv | tee -a %s | grep Counter-example"
 		    file fct timeout i log_file in
 		already_detected || (Sys.command cmd) = 0
 	      in
@@ -345,7 +345,7 @@ let run() =
 	   ncd, ncd_ok_max_t, ncd_ok_sum_t, ncd_ok_nb_t,
 	   ncd_ko_max_t, ncd_ko_sum_t, ncd_ko_nb_t,
 	   cwd, cwd_ok_max_t, cwd_ok_sum_t, cwd_ok_nb_t,
-	   ncw_ko_max_t, cwd_ko_sum_t, cwd_ko_nb_t) m =
+	   cwd_ko_max_t, cwd_ko_sum_t, cwd_ko_nb_t) m =
       let wp, wp_ok_max_t, wp_ok_sum_t, wp_ok_nb_t,
 	  wp_ko_max_t, wp_ko_sum_t, wp_ko_nb_t =
 	data_of m wp wp_ok_max_t wp_ok_sum_t wp_ok_nb_t
@@ -355,9 +355,9 @@ let run() =
 	data_of m ncd ncd_ok_max_t ncd_ok_sum_t ncd_ok_nb_t
 		ncd_ko_max_t ncd_ko_sum_t ncd_ko_nb_t m.nc_detected in
       let cwd, cwd_ok_max_t, cwd_ok_sum_t, cwd_ok_nb_t,
-	  ncw_ko_max_t, cwd_ko_sum_t, cwd_ko_nb_t =
+	  cwd_ko_max_t, cwd_ko_sum_t, cwd_ko_nb_t =
 	data_of m cwd cwd_ok_max_t cwd_ok_sum_t cwd_ok_nb_t
-		ncw_ko_max_t cwd_ko_sum_t cwd_ko_nb_t m.cw_detected in
+		cwd_ko_max_t cwd_ko_sum_t cwd_ko_nb_t m.cw_detected in
       Mut_options.Self.result ~dkey "%a" pp_mutant m;
       Mut_options.Self.result ~dkey "--------------------------";
       wp, wp_ok_max_t, wp_ok_sum_t, wp_ok_nb_t,
@@ -365,7 +365,7 @@ let run() =
       ncd, ncd_ok_max_t, ncd_ok_sum_t, ncd_ok_nb_t,
       ncd_ko_max_t, ncd_ko_sum_t, ncd_ko_nb_t,
       cwd, cwd_ok_max_t, cwd_ok_sum_t, cwd_ok_nb_t,
-      ncw_ko_max_t, cwd_ko_sum_t, cwd_ko_nb_t
+      cwd_ko_max_t, cwd_ko_sum_t, cwd_ko_nb_t
     in
     let wp, wp_ok_max_t, wp_ok_sum_t, wp_ok_nb_t,
       wp_ko_max_t, wp_ko_sum_t, wp_ko_nb_t,
