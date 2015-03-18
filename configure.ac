@@ -14,7 +14,6 @@ check_plugin(mutation,PLUGIN_RELATIVE_PATH(plugin_file),
 	     [support for Mutation plug-in],yes,yes)
 
 plugin_require(mutation,StaDy)
-plugin_require(mutation,Inline)
 check_plugin_dependencies
 
 # Check Frama-C version
