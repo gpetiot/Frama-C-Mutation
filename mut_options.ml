@@ -35,7 +35,7 @@ module Int_for_collection = struct
   include Datatype.Int
   let of_string = int_of_string
   let to_string = string_of_int
-  let of_singleton_string = Self.no_element_of_string
+  let of_singleton_string = Parameter_sig.no_element_of_string
 end
 
 module Int_list(X: Parameter_sig.Input_with_arg) =
