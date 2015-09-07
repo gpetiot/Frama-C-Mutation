@@ -282,7 +282,7 @@ let rec mutate fct cpt recap = function
 		  Printf.sprintf
 		    "frama-c %s -main %s -rte -rte-locations c,acsl -then \
 		     -stady -stady-stop-when-assert-violated \
-		     -stady-timeout %i -stady-cwd %i \
+		     -stady-timeout %i -stady-swd %i \
 		     -stady-pc-options=\"-pc-k-path=4\" | \
 		     tee -a %s | grep Counter-example"
 		    file fct stady_timeout i log_file in
