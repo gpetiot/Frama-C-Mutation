@@ -289,6 +289,7 @@ let rec mutate fct cpt recap = function
 		already_detected || (Sys.command cmd) = 0
 	      in
 	      let l = Mut_options.Contract_weakness_detection.get() in
+	      let l = List.map int_of_string l in
 	      let begin_cwd_time = CalendarLib.Ftime.now() in
 	      let cw_detected =	List.fold_left on_int false l in
 	      let end_cwd_time = CalendarLib.Ftime.now() in
@@ -490,7 +491,7 @@ let run() =
 	
 let run =
   let deps = [Ast.self; Mut_options.Enabled.self] in
-  let f, _self = State_builder.apply_once "MUT" deps run in
+  let f, _self = State_builder.apply_once "mutation" deps run in
   f
     
 let() = Db.Main.extend run

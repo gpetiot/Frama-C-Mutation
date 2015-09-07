@@ -3,11 +3,11 @@
 #######################
 
 ifndef FRAMAC_SHARE
-FRAMAC_SHARE	:= $(shell frama-c -print-share-path)
+FRAMAC_SHARE	:= $(shell frama-c-config -print-share-path)
 endif
 
 ifndef FRAMAC_LIBDIR
-FRAMAC_LIBDIR	:= $(shell frama-c -print-libpath)
+FRAMAC_LIBDIR	:= $(shell frama-c-config -print-libpath)
 endif
 
 #########################
@@ -19,24 +19,32 @@ PLUGIN_NAME := Mutation
 PLUGIN_CMO := local_config mut_options mut_register
 PLUGIN_GUI_CMO 	:= 
 PLUGIN_HAS_MLI:= yes
-PLUGIN_DISTRIBUTED:=no
-#PLUGIN_DISTRIB_EXTERNAL:=Makefile.in configure.ac README.md
-PLUGIN_DEPENDENCIES:=StaDy
+PLUGIN_DEPENDENCIES:=StaDy RteGen
 PLUGIN_TESTS_DIRS:= search
 PLUGIN_PTESTS_OPTS :=
 PLUGIN_GENERATED:= $(PLUGIN_DIR)/local_config.ml
 
-OCAMLFIND:=$(shell which ocamlfind)
-CALENDAR_PATH:=$(shell $(OCAMLFIND) query calendar)
+# OCAMLFIND:=$(shell which ocamlfind)
 
-PLUGIN_BFLAGS:=-I $(CALENDAR_PATH)
-PLUGIN_OFLAGS:=-I $(CALENDAR_PATH)
-PLUGIN_DOCFLAGS:=-I $(CALENDAR_PATH)
-PLUGIN_EXTRA_BYTE:= calendarLib.cma
-PLUGIN_EXTRA_OPT:= calendarLib.cmxa
+# ifneq ("$(OCAMLFIND)","")
+#   CALENDAR_PATH:=$(shell $(OCAMLFIND) query calendar)
+#   ifeq ("$(CALENDAR_PATH)","")
+#     CALENDAR_PATH:=$(shell ocamlc -where)
+#   else
+#     PLUGIN_BFLAGS:=-I $(CALENDAR_PATH)
+#     PLUGIN_OFLAGS:=-I $(CALENDAR_PATH)
+#     PLUGIN_DOCFLAGS:=-I $(CALENDAR_PATH)
+#   endif
+# else
+#   CALENDAR_PATH:=$(shell ocamlc -where)
+# endif
 
-calendarLib.cma:
-calendarLib.cmxa:
+PLUGIN_BFLAGS:=-I @CALENDAR_PATH@
+PLUGIN_OFLAGS:=-I @CALENDAR_PATH@
+PLUGIN_DOCFLAGS:=-I @CALENDAR_PATH@
+
+PLUGIN_EXTRA_BYTE:= @CALENDAR_PATH@/calendarLib.cma
+PLUGIN_EXTRA_OPT:= @CALENDAR_PATH@/calendarLib.cmxa
 
 $(PLUGIN_DIR)/tests/test_config: $(PLUGIN_DIR)/tests/test_config.in
 	$(PRINT_MAKING) $@

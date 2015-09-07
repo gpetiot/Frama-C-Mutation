@@ -1,1 +1,0 @@
-CMD: @frama-c@ -add-path /usr/local/lib/frama-c/plugins

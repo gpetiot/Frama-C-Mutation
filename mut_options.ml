@@ -31,20 +31,8 @@ end)
 
 (* StaDy *)
 
-module Int_for_collection = struct
-  include Datatype.Int
-  let of_string = int_of_string
-  let to_string = string_of_int
-  let of_singleton_string = Parameter_sig.no_element_of_string
-end
-
-module Int_list(X: Parameter_sig.Input_with_arg) =
-  Self.Make_list
-    (Int_for_collection)
-    (struct include X let default = [] end)
-
 module Contract_weakness_detection =
-  Int_list
+  Self.String_list
     (struct
       let option_name = "-mut-cwd"
       let help = "identifiers of statement to check for contract weakness"

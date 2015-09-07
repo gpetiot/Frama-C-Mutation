@@ -14,6 +14,7 @@ check_plugin(mutation,PLUGIN_RELATIVE_PATH(plugin_file),
 	     [support for Mutation plug-in],yes,yes)
 
 plugin_require(mutation,StaDy)
+plugin_require(mutation,RteGen)
 check_plugin_dependencies
 
 # Check Frama-C version
@@ -22,19 +23,26 @@ check_plugin_dependencies
 AC_MSG_CHECKING(for Frama-C version)
 AC_MSG_RESULT($FRAMAC_VERSION)
 
-DEV_VERSION_NUMBER=`echo $FRAMAC_VERSION | sed -e 's/.*-\(.*\)/\1/' `
-VERSION_NUMBER=`echo $DEV_VERSION_NUMBER | sed -e 's/\(.*\)+dev/\1/' `
-REQUIRED_NUMBER=20140301
+VERSION_NUMBER=`echo $FRAMAC_VERSION | sed -n -e 's/[[a-zA-Z]]\+-\([[0-9]]\+\)-.*/\1/p'`
+EXTRA_VERSION_NUMBER=`echo $FRAMAC_VERSION | sed -n -e 's/[[a-zA-Z]]\+-[[0-9]]\+-\(.*\)/\1/p'`
+REQUIRED_NUMBER=20150201
+REQUIRED_NAME=Sodium
 
 case $FRAMAC_VERSION in
-  Neon-$REQUIRED_NUMBER+dev*)
-    # at the time being, must use the Frama-C development version
-    ;;
+  # $REQUIRED_NAME-$REQUIRED_NUMBER+dev*)
+  #   # at the time being, must use the Frama-C development version
+  #   ;;
+  $REQUIRED_NAME-$REQUIRED_NUMBER*)
+    if test -n "$EXTRA_VERSION_NUMBER"; then
+      AC_MSG_WARN(no guarantee of compatibility with your Frama-C custom \
+version of $REQUIRED_NAME)
+    fi;;
   *)
     if test $VERSION_NUMBER -lt $REQUIRED_NUMBER; then
-      AC_MSG_ERROR(Frama-C version must be at least Neon-$REQUIRED_NUMBER.)
+      AC_MSG_ERROR(Frama-C version must be at least \
+$REQUIRED_NAME-$REQUIRED_NUMBER.)
     else
-      AC_MSG_WARN(Frama-C version is more recent than Neon: \
+      AC_MSG_WARN(Frama-C version is more recent than $REQUIRED_NAME: \
 use it at your own risk)
     fi;;
 esac
@@ -58,11 +66,65 @@ if test -z $HAVE_STDIO_H; then
   AC_MSG_WARN([stdio.h missing: non-regression tests unavailable.])
 fi
 
+#############
+# ocamlfind #
+#############
+
+AC_CHECK_PROG(OCAMLC,ocamlc,ocamlc,no) # setting $OCAMLC
+OCAMLLIB=`$OCAMLC -where | tr -d '\\r'` # setting $OCAMLLIB
+AC_CHECK_PROG(OCAMLFIND,ocamlfind,ocamlfind,no) # setting $OCAMLFIND
+
+if test "$OCAMLFIND" = "no" ; then
+   echo "No ocamlfind detected"
+else
+   OCAMLLIB_BY_FINDLIB=`ocamlfind printconf stdlib | tr -d '\\r'`
+   if test "$OCAMLLIB_BY_FINDLIB" = "$OCAMLLIB" ; then
+      echo "OCamlfind detected and enabled"
+   else
+      echo "OCamlfind detected but disabled. Standard libraries differ:"
+      echo "  ocamlc: '$OCAMLLIB'"
+      echo "  ocamlfind: '$OCAMLLIB_BY_FINDLIB'"
+      OCAMLFIND="no"
+   fi
+fi
+
+# Calendar
+###########
+
+CALENDAR=calendar.cma;
+AC_MSG_CHECKING(calendar);
+HAS_CALENDAR=false;
+
+# trying to find calendar with ocamlfind
+CALENDAR_PATH=$($OCAMLFIND query calendar 2>/dev/null | tr -d '\r\n');
+if test "$OCAMLFIND" != "no"; then
+   if test -z "$CALENDAR_PATH"; then
+      echo "calandar not found by ocamlfind";
+   else
+      HAS_CALENDAR=true;
+      AC_MSG_RESULT($CALENDAR_PATH);
+   fi;
+fi;
+
+# trying to find calendar with ocamlc -where
+if [ ! "$HAS_CALENDAR" ]; then
+  if [ ls `ocamlc -where`/../calendar/calendarLib.cma ]; then
+    HAS_CALENDAR=true;
+    AC_MSG_RESULT($CALENDAR);
+  fi;
+fi;
+
+# not found
+if [ ! "$HAS_CALENDAR" ]; then
+    AC_MSG_ERROR($CALENDAR not found);
+fi;
+
 #######################
 # Generating Makefile #
 #######################
 
 AC_SUBST(MAY_RUN_TESTS)
 AC_SUBST(OCAMLVERSION)
+AC_SUBST(CALENDAR_PATH)
 
 write_plugin_config(Makefile)
