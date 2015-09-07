@@ -1,6 +1,6 @@
 
 /* run.config
-OPT: -main search -mut -mut-msg-key mutant,progress
+STDOPT: +"-main search -mut -mut-msg-key mutant,progress"
 */
 
 /*@ requires \valid(t+(0..4));
