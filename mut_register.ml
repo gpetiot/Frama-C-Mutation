@@ -260,7 +260,7 @@ let rec mutate fct cpt recap = function
 	  Mut_options.Self.feedback ~dkey "not proved";
 	  let cmd =
 	    Printf.sprintf
-	      "frama-c %s -main %s -rte -rte-locations c,acsl -then -stady \
+	      "frama-c %s -main %s -rte -then -stady \
 	       -stady-stop-when-assert-violated -stady-timeout %i \
 	       -stady-pc-options=\"-pc-k-path=4\" | tee -a %s | \
 	       grep DRIVER:"
@@ -280,7 +280,7 @@ let rec mutate fct cpt recap = function
 	      let on_int already_detected i =
 		let cmd =
 		  Printf.sprintf
-		    "frama-c %s -main %s -rte -rte-locations c,acsl -then \
+		    "frama-c %s -main %s -rte -then \
 		     -stady -stady-stop-when-assert-violated \
 		     -stady-timeout %i -stady-swd %i \
 		     -stady-pc-options=\"-pc-k-path=4\" | \
