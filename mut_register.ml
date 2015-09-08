@@ -263,7 +263,7 @@ let rec mutate fct cpt recap = function
 	      "frama-c %s -main %s -rte -rte-locations c,acsl -then -stady \
 	       -stady-stop-when-assert-violated -stady-timeout %i \
 	       -stady-pc-options=\"-pc-k-path=4\" | tee -a %s | \
-	       grep Counter-example"
+	       grep DRIVER:"
 	      file fct stady_timeout log_file in
 	  let begin_ncd_time = CalendarLib.Ftime.now() in
 	  let nc_detected = (Sys.command cmd) = 0 in
@@ -284,7 +284,7 @@ let rec mutate fct cpt recap = function
 		     -stady -stady-stop-when-assert-violated \
 		     -stady-timeout %i -stady-swd %i \
 		     -stady-pc-options=\"-pc-k-path=4\" | \
-		     tee -a %s | grep Counter-example"
+		     tee -a %s | grep DRIVER:"
 		    file fct stady_timeout i log_file in
 		already_detected || (Sys.command cmd) = 0
 	      in
