@@ -12,6 +12,7 @@ type mutation =
   | Mut_Pnot of predicate named * predicate named * location
   | Mut_LoopInv of predicate named
   | Mut_Post of identified_predicate
+  | Mut_Term of term * term * location
 
 let pp_aux fmt f e1 e2 loc =
   Format.fprintf fmt "%a: `%a` --> `%a`" Printer.pp_location loc f e1 f e2
@@ -26,6 +27,7 @@ let pp_mutation fmt = function
     Printer.pp_location p.loc Printer.pp_predicate_named p
   | Mut_Post p -> Format.fprintf fmt "%a: - ensures %a"
     Printer.pp_location p.ip_loc Printer.pp_identified_predicate p
+  | Mut_Term(t1,t2,loc) -> pp_aux fmt Printer.pp_term t1 t2 loc
 
 
 let other_binops = function
@@ -56,11 +58,14 @@ let other_relations = function
 let loc_ok (loc,_) =
   Filename.basename loc.Lexing.pos_fname <> "__fc_builtin_for_normalization.i"
 
+let add_i i t =
+  Logic_const.term (TBinOp(PlusA,t,Logic_const.tinteger i)) t.term_type
 
 class gatherer funcname = object(self)
   inherit Visitor.frama_c_inplace
 
   val mutable mutations = []
+  val mutable postcond_or_invariant = false
 
   method get_mutations() = mutations
   method private add m = mutations <- m :: mutations
@@ -71,8 +76,9 @@ class gatherer funcname = object(self)
     if Kernel_function.get_name kf <> funcname then
       match bhv.b_post_cond with
       | (_,h)::_ as l when Mut_options.Mut_Spec.get() && loc_ok h.ip_loc ->
-	List.iter add l;
-	Cil.DoChildren
+	 postcond_or_invariant <- true;
+	 List.iter add l;
+	 Cil.DoChildrenPost (fun x -> postcond_or_invariant <- false; x)
       | _ -> Cil.DoChildren
     else (* for main function: only mutate postcondition predicates *)
       let f (_,h) = ignore (self#videntified_predicate h) in
@@ -81,8 +87,9 @@ class gatherer funcname = object(self)
 
   method! vcode_annot ca = match ca.annot_content with
   | AInvariant(_,b,p) when Mut_options.Mut_Spec.get() && b && loc_ok p.loc ->
-    self#add (Mut_LoopInv p);
-    Cil.DoChildren
+     postcond_or_invariant <- true;
+     self#add (Mut_LoopInv p);
+     Cil.DoChildrenPost (fun x -> postcond_or_invariant <- false; x)
   | _ -> Cil.DoChildren
 
   method! vpredicate_named p = match p.content with
@@ -90,9 +97,21 @@ class gatherer funcname = object(self)
   | Pforall(_,{content=Pimplies(_,y)}) ->
     ignore (self#vpredicate_named y);
     Cil.SkipChildren
-  | Prel(r,_,_) when Mut_options.Mut_Spec.get() && loc_ok p.loc ->
+  | Prel(r,t1,t2) when Mut_options.Mut_Spec.get() && loc_ok p.loc ->
     let add o = self#add (Mut_Prel (r, o, p.loc)) in
     List.iter add (other_relations r);
+    begin
+      if postcond_or_invariant then
+	let l = [1;2;3] in
+	match r with
+	| Rle
+	| Rlt ->
+	   List.iter (fun i -> self#add (Mut_Term(t2,(add_i i t2),p.loc))) l
+	| Rge
+	| Rgt ->
+	   List.iter (fun i -> self#add (Mut_Term(t1,(add_i i t1),p.loc))) l
+	| _ -> ()
+    end;
     Cil.DoChildren
   | Pnot(p2) when Mut_options.Mut_Spec.get() && loc_ok p.loc ->
     self#add (Mut_Pnot (p, p2, p.loc));
@@ -152,6 +171,12 @@ class mutation_visitor prj mut = object
   method! vpredicate_named p = match p.content, mut with
   | Prel(r,x,y), Mut_Prel(w,z,l) when same_locs p.loc l && r = w ->
     Cil.ChangeDoChildrenPost (p, fun _ -> Logic_const.prel (z,x,y))
+  | Prel(r,x,y), Mut_Term(a,b,l)
+       when same_locs p.loc l && x.term_loc = a.term_loc ->
+     Cil.ChangeDoChildrenPost (p, fun _ -> Logic_const.prel (r,b,y))
+  | Prel(r,x,y), Mut_Term(a,b,l)
+       when same_locs p.loc l && y.term_loc = a.term_loc ->
+     Cil.ChangeDoChildrenPost (p, fun _ -> Logic_const.prel (r,x,b))
   | Pnot(_), Mut_Pnot(_,y,l) when same_locs p.loc l ->
     Cil.ChangeDoChildrenPost (p, fun _ -> y)
   | _ -> Cil.DoChildren
