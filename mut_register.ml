@@ -141,9 +141,29 @@ class gatherer funcname = object(self)
     Cil.DoChildren
   | _ -> Cil.DoChildren
 
-  method! vglob_aux glob = match glob with
-  | GFun (f,_) when f.svar.vname = (funcname ^ "_precond") -> Cil.SkipChildren
-  | _ -> Cil.DoChildren
+  method! vglob_aux glob =
+    match glob with
+    | GType (_,l) when loc_ok l -> Cil.DoChildren
+    | GType _ -> Cil.SkipChildren
+    | GCompTag (_,l) when loc_ok l -> Cil.DoChildren
+    | GCompTag _ -> Cil.SkipChildren
+    | GCompTagDecl (_,l) when loc_ok l -> Cil.DoChildren
+    | GCompTagDecl _ -> Cil.SkipChildren
+    | GEnumTag (_,l) when loc_ok l -> Cil.DoChildren
+    | GEnumTag _ -> Cil.SkipChildren
+    | GEnumTagDecl (_,l) when loc_ok l -> Cil.DoChildren
+    | GEnumTagDecl _ -> Cil.SkipChildren
+    | GVarDecl (_,_,l) when loc_ok l -> Cil.DoChildren
+    | GVarDecl _ -> Cil.SkipChildren
+    | GVar (_,_,l) when loc_ok l -> Cil.DoChildren
+    | GVar _ -> Cil.SkipChildren
+    | GFun (f,_) when f.svar.vname = (funcname ^ "_precond") -> Cil.SkipChildren
+    | GFun (_,l) when loc_ok l -> Cil.DoChildren
+    | GFun _ -> Cil.SkipChildren
+    | GAsm _ -> Cil.SkipChildren
+    | GPragma _ -> Cil.SkipChildren
+    | GText _ -> Cil.SkipChildren
+    | GAnnot _ -> Cil.SkipChildren
 
   method! vassigns _ = Cil.SkipChildren
 end
