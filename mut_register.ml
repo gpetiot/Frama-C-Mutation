@@ -66,6 +66,7 @@ class gatherer funcname = object(self)
 
   val mutable mutations = []
   val mutable postcond_or_invariant = false
+  val mutable in_quantif = false
 
   method get_mutations() = mutations
   method private add m = mutations <- m :: mutations
@@ -95,13 +96,15 @@ class gatherer funcname = object(self)
   method! vpredicate_named p = match p.content with
   | Pexists(_,{content=Pand(_,y)})
   | Pforall(_,{content=Pimplies(_,y)}) ->
-    ignore (self#vpredicate_named y);
-    Cil.SkipChildren
+     in_quantif <- true;
+     ignore (self#vpredicate_named y);
+     in_quantif <- false;
+     Cil.SkipChildren
   | Prel(r,t1,t2) when Mut_options.Mut_Spec.get() && loc_ok p.loc ->
     let add o = self#add (Mut_Prel (r, o, p.loc)) in
     List.iter add (other_relations r);
     begin
-      if postcond_or_invariant then
+      if postcond_or_invariant && not in_quantif then
 	let l = [1;2;3] in
 	match r with
 	| Rle
