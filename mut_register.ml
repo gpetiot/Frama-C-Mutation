@@ -255,20 +255,6 @@ let stady_timeout = 5
 let pattern = "\\[wp\\] Proved goals:[ ]*\\([0-9]*\\)[ ]*\\/[ ]*\\([0-9]*\\)"
 let sed_cmd = Printf.sprintf "sed 's/%s/[ \\1 -eq \\2 ]/'" pattern
 
-exception Timeout
-
-let timeout f arg time default_value =
-  let res = ref default_value in
-  ignore (Unix.alarm time);
-  begin
-    try
-      res := f arg;
-      ignore (Unix.alarm 0)
-    with
-    | Timeout -> ()
-    | e -> ignore (Unix.alarm 0); raise e
-  end;
-  !res
 
 let rec mutate fct cpt recap = function
   | [] -> recap
@@ -329,9 +315,7 @@ let rec mutate fct cpt recap = function
 	       grep DRIVER:"
 	      file fct stady_timeout log_file in
 	  let begin_ncd_time = CalendarLib.Ftime.now() in
-	  let nc_detected =
-	    timeout (fun c -> (Sys.command c) = 0) cmd (stady_timeout+1) false
-	  in
+	  let nc_detected = (Sys.command cmd) = 0 in
 	  let end_ncd_time = CalendarLib.Ftime.now() in
 	  let diff_ncd_time =
 	    CalendarLib.Ftime.sub end_ncd_time begin_ncd_time in
@@ -352,9 +336,7 @@ let rec mutate fct cpt recap = function
 		     tee -a %s | grep DRIVER:"
 		    file fct stady_timeout i log_file
 		in
-		already_detected ||
-		  timeout
-		    (fun c -> (Sys.command c) = 0) cmd (stady_timeout+1) false
+		already_detected || (Sys.command cmd) = 0
 	      in
 	      let l = Mut_options.Contract_weakness_detection.get() in
 	      let l = List.map int_of_string l in
@@ -405,7 +387,6 @@ let run() =
       let pp_aux fmt x = Format.fprintf fmt "%i" x.id in
       Format.fprintf fmt "(%a)" (Pretty_utils.pp_list ~sep:"," pp_aux) x
     in
-    Sys.set_signal Sys.sigalrm (Sys.Signal_handle (fun _ -> raise Timeout));
     (* WP on initial program *)
     let cmd =
       Printf.sprintf
