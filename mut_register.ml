@@ -156,8 +156,10 @@ class gatherer funcname = object(self)
     | GEnumTag _ -> Cil.SkipChildren
     | GEnumTagDecl (_,l) when loc_ok l -> Cil.DoChildren
     | GEnumTagDecl _ -> Cil.SkipChildren
-    | GVarDecl (_,_,l) when loc_ok l -> Cil.DoChildren
+    | GVarDecl (_,l) when loc_ok l -> Cil.DoChildren
     | GVarDecl _ -> Cil.SkipChildren
+    | GFunDecl (_,_,l) when loc_ok l -> Cil.DoChildren
+    | GFunDecl _ -> Cil.SkipChildren
     | GVar (_,_,l) when loc_ok l -> Cil.DoChildren
     | GVar _ -> Cil.SkipChildren
     | GFun (f,_) when f.svar.vname = (funcname ^ "_precond") -> Cil.SkipChildren
