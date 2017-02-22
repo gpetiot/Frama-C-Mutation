@@ -9,8 +9,8 @@ type mutation =
   (* mutations on spec *)
   | Mut_TBinOp of binop * binop * location
   | Mut_Prel of relation * relation * location
-  | Mut_Pnot of predicate named * predicate named * location
-  | Mut_LoopInv of predicate named
+  | Mut_Pnot of predicate * predicate * location
+  | Mut_LoopInv of predicate
   | Mut_Post of identified_predicate
   | Mut_Term of term * term * location
 
@@ -22,11 +22,11 @@ let pp_mutation fmt = function
   | Mut_BinOp(b1,b2,loc) -> pp_aux fmt Printer.pp_binop b1 b2 loc
   | Mut_If(e1,e2,loc) -> pp_aux fmt Printer.pp_exp e1 e2 loc
   | Mut_Prel(r1,r2,loc) -> pp_aux fmt Printer.pp_relation r1 r2 loc
-  | Mut_Pnot(p1,p2,loc) -> pp_aux fmt Printer.pp_predicate_named p1 p2 loc
+  | Mut_Pnot(p1,p2,loc) -> pp_aux fmt Printer.pp_predicate p1 p2 loc
   | Mut_LoopInv p -> Format.fprintf fmt "%a: - loop invariant %a"
-    Printer.pp_location p.loc Printer.pp_predicate_named p
+    Printer.pp_location p.pred_loc Printer.pp_predicate p
   | Mut_Post p -> Format.fprintf fmt "%a: - ensures %a"
-    Printer.pp_location p.ip_loc Printer.pp_identified_predicate p
+    Printer.pp_location p.ip_content.pred_loc Printer.pp_identified_predicate p
   | Mut_Term(t1,t2,loc) -> pp_aux fmt Printer.pp_term t1 t2 loc
 
 
@@ -76,7 +76,8 @@ class gatherer funcname = object(self)
     let add (_,p) = self#add (Mut_Post p) in
     if Kernel_function.get_name kf <> funcname then
       match bhv.b_post_cond with
-      | (_,h)::_ as l when Mut_options.Mut_Spec.get() && loc_ok h.ip_loc ->
+      | (_,h)::_ as l
+	  when Mut_options.Mut_Spec.get() && loc_ok h.ip_content.pred_loc ->
 	 postcond_or_invariant <- true;
 	 List.iter add l;
 	 Cil.DoChildrenPost (fun x -> postcond_or_invariant <- false; x)
@@ -87,21 +88,22 @@ class gatherer funcname = object(self)
       Cil.SkipChildren
 
   method! vcode_annot ca = match ca.annot_content with
-  | AInvariant(_,b,p) when Mut_options.Mut_Spec.get() && b && loc_ok p.loc ->
+  | AInvariant(_,b,p)
+      when Mut_options.Mut_Spec.get() && b && loc_ok p.pred_loc ->
      postcond_or_invariant <- true;
      self#add (Mut_LoopInv p);
      Cil.DoChildrenPost (fun x -> postcond_or_invariant <- false; x)
   | _ -> Cil.DoChildren
 
-  method! vpredicate_named p = match p.content with
-  | Pexists(_,{content=Pand(_,y)})
-  | Pforall(_,{content=Pimplies(_,y)}) ->
+  method! vpredicate p = match p.pred_content with
+  | Pexists(_,{pred_content=Pand(_,y)})
+  | Pforall(_,{pred_content=Pimplies(_,y)}) ->
      in_quantif <- true;
-     ignore (self#vpredicate_named y);
+     ignore (self#vpredicate y);
      in_quantif <- false;
      Cil.SkipChildren
-  | Prel(r,t1,t2) when Mut_options.Mut_Spec.get() && loc_ok p.loc ->
-    let add o = self#add (Mut_Prel (r, o, p.loc)) in
+  | Prel(r,t1,t2) when Mut_options.Mut_Spec.get() && loc_ok p.pred_loc ->
+    let add o = self#add (Mut_Prel (r, o, p.pred_loc)) in
     List.iter add (other_relations r);
     begin
       if postcond_or_invariant && not in_quantif then
@@ -109,15 +111,15 @@ class gatherer funcname = object(self)
 	match r with
 	| Rle
 	| Rlt ->
-	   List.iter (fun i -> self#add (Mut_Term(t2,(add_i i t2),p.loc))) l
+	   List.iter(fun i -> self#add (Mut_Term(t2,(add_i i t2),p.pred_loc))) l
 	| Rge
 	| Rgt ->
-	   List.iter (fun i -> self#add (Mut_Term(t1,(add_i i t1),p.loc))) l
+	   List.iter(fun i -> self#add (Mut_Term(t1,(add_i i t1),p.pred_loc))) l
 	| _ -> ()
     end;
     Cil.DoChildren
-  | Pnot(p2) when Mut_options.Mut_Spec.get() && loc_ok p.loc ->
-    self#add (Mut_Pnot (p, p2, p.loc));
+  | Pnot(p2) when Mut_options.Mut_Spec.get() && loc_ok p.pred_loc ->
+    self#add (Mut_Pnot (p, p2, p.pred_loc));
     Cil.DoChildren
   | _ -> Cil.DoChildren
 
@@ -188,21 +190,22 @@ class mutation_visitor prj mut = object
   | _ -> Cil.DoChildren
 
   method! vcode_annot ca = match ca.annot_content, mut with
-  | AInvariant(_,linv,p), Mut_LoopInv m when linv && same_locs p.loc m.loc ->
-    let ca2 = AInvariant([],true,Logic_const.ptrue) in
-    Cil.ChangeDoChildrenPost (ca, fun _ -> Logic_const.new_code_annotation ca2)
+  | AInvariant(_,linv,p), Mut_LoopInv m
+    when linv && same_locs p.pred_loc m.pred_loc ->
+     let ca2 = AInvariant([],true,Logic_const.ptrue) in
+     Cil.ChangeDoChildrenPost (ca, fun _ -> Logic_const.new_code_annotation ca2)
   | _ -> Cil.DoChildren
 
-  method! vpredicate_named p = match p.content, mut with
-  | Prel(r,x,y), Mut_Prel(w,z,l) when same_locs p.loc l && r = w ->
+  method! vpredicate p = match p.pred_content, mut with
+  | Prel(r,x,y), Mut_Prel(w,z,l) when same_locs p.pred_loc l && r = w ->
     Cil.ChangeDoChildrenPost (p, fun _ -> Logic_const.prel (z,x,y))
   | Prel(r,x,y), Mut_Term(a,b,l)
-       when same_locs p.loc l && x.term_loc = a.term_loc ->
+       when same_locs p.pred_loc l && x.term_loc = a.term_loc ->
      Cil.ChangeDoChildrenPost (p, fun _ -> Logic_const.prel (r,b,y))
   | Prel(r,x,y), Mut_Term(a,b,l)
-       when same_locs p.loc l && y.term_loc = a.term_loc ->
+       when same_locs p.pred_loc l && y.term_loc = a.term_loc ->
      Cil.ChangeDoChildrenPost (p, fun _ -> Logic_const.prel (r,x,b))
-  | Pnot(_), Mut_Pnot(_,y,l) when same_locs p.loc l ->
+  | Pnot(_), Mut_Pnot(_,y,l) when same_locs p.pred_loc l ->
     Cil.ChangeDoChildrenPost (p, fun _ -> y)
   | _ -> Cil.DoChildren
 
