@@ -13,6 +13,7 @@ type mutation =
   | Mut_LoopInv of predicate
   | Mut_Post of identified_predicate
   | Mut_Term of term * term * location
+  | Mut_Variant of term * term * location
 
 let pp_aux fmt f e1 e2 loc =
   Format.fprintf fmt "%a: `%a` --> `%a`" Printer.pp_location loc f e1 f e2
@@ -28,6 +29,7 @@ let pp_mutation fmt = function
   | Mut_Post p -> Format.fprintf fmt "%a: - ensures %a"
     Printer.pp_location p.ip_content.pred_loc Printer.pp_identified_predicate p
   | Mut_Term(t1,t2,loc) -> pp_aux fmt Printer.pp_term t1 t2 loc
+  | Mut_Variant(t1,t2,loc) -> pp_aux fmt Printer.pp_term t1 t2 loc
 
 
 let other_binops = function
@@ -93,6 +95,27 @@ class gatherer funcname = object(self)
      postcond_or_invariant <- true;
      self#add (Mut_LoopInv p);
      Cil.DoChildrenPost (fun x -> postcond_or_invariant <- false; x)
+  | AVariant(t,_) ->
+     let neg t = Logic_const.term (TUnOp(Neg,t)) t.term_type in
+     let add t x = Logic_const.term (TBinOp(PlusA,t,x)) t.term_type in
+     let sub t x = Logic_const.term (TBinOp(MinusA,t,x)) t.term_type in
+     (* v -> v +/- 1, 5, 10 *)
+     self#add (Mut_Variant(t, add t (Logic_const.tinteger 1), t.term_loc));
+     self#add (Mut_Variant(t, sub t (Logic_const.tinteger 1), t.term_loc));
+     self#add (Mut_Variant(t, add t (Logic_const.tinteger 5), t.term_loc));
+     self#add (Mut_Variant(t, sub t (Logic_const.tinteger 5), t.term_loc));
+     self#add (Mut_Variant(t, add t (Logic_const.tinteger 10), t.term_loc));
+     self#add (Mut_Variant(t, sub t (Logic_const.tinteger 10), t.term_loc));
+     (* v -> -v *)
+     self#add (Mut_Variant(t, neg t, t.term_loc));
+     (* v -> - v +/- 1, 5, 10 *)
+     self#add (Mut_Variant(t, neg(add t(Logic_const.tinteger 1)), t.term_loc));
+     self#add (Mut_Variant(t, neg(sub t(Logic_const.tinteger 1)), t.term_loc));
+     self#add (Mut_Variant(t, neg(add t(Logic_const.tinteger 5)), t.term_loc));
+     self#add (Mut_Variant(t, neg(sub t(Logic_const.tinteger 5)), t.term_loc));
+     self#add (Mut_Variant(t, neg(add t(Logic_const.tinteger 10)), t.term_loc));
+     self#add (Mut_Variant(t, neg(sub t(Logic_const.tinteger 10)), t.term_loc));
+     Cil.DoChildren
   | _ -> Cil.DoChildren
 
   method! vpredicate p = match p.pred_content with
@@ -193,6 +216,9 @@ class mutation_visitor prj mut = object
   | AInvariant(_,linv,p), Mut_LoopInv m
     when linv && same_locs p.pred_loc m.pred_loc ->
      let ca2 = AInvariant([],true,Logic_const.ptrue) in
+     Cil.ChangeDoChildrenPost (ca, fun _ -> Logic_const.new_code_annotation ca2)
+  | AVariant (t, str), Mut_Variant (_t1,t2,l) when same_locs t.term_loc l ->
+     let ca2 = AVariant (t2, str) in
      Cil.ChangeDoChildrenPost (ca, fun _ -> Logic_const.new_code_annotation ca2)
   | _ -> Cil.DoChildren
 
@@ -331,22 +357,22 @@ let rec mutate fct cpt recap = function
 	  else
 	    begin
 	      Mut_options.Self.feedback ~dkey "no NC detected";
-	      let on_int already_detected i =
+	      let on_sw_label already_detected label =
 		let cmd =
 		  Printf.sprintf
-		    "frama-c %s -main %s -rte -then \
+		    "timeout --signal=SIGINT %i frama-c %s -main %s -rte -then \
 		     -stady -stady-stop-when-assert-violated \
-		     -stady-timeout %i -stady-swd %i \
+		     -stady-timeout %i -stady-swd %s \
 		     -stady-pc-options=\"-pc-k-path=4\" | \
 		     tee -a %s | grep DRIVER:"
-		    file fct stady_timeout i log_file
+		    (stady_timeout * 4)
+		    file fct stady_timeout label log_file
 		in
 		already_detected || (Sys.command cmd) = 0
 	      in
 	      let l = Mut_options.Contract_weakness_detection.get() in
-	      let l = List.map int_of_string l in
 	      let begin_cwd_time = CalendarLib.Ftime.now() in
-	      let cw_detected =	List.fold_left on_int false l in
+	      let cw_detected =	List.fold_left on_sw_label false l in
 	      let end_cwd_time = CalendarLib.Ftime.now() in
 	      let diff_cwd_time =
 		CalendarLib.Ftime.sub end_cwd_time begin_cwd_time in
@@ -498,7 +524,7 @@ let run() =
 		    %f & \
 		    %i & %f & %f & %f & %f & \
 		    %f & \
-		    %f & %f \
+		    %f & %f & \
 		    %f & \
 		    %i \\\\ \n"
 		   funcname n_mutations
