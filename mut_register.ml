@@ -67,7 +67,8 @@ class gatherer funcname = object(self)
   inherit Visitor.frama_c_inplace
 
   val mutable mutations = []
-  val mutable postcond_or_invariant = false
+  val mutable in_postcond = false
+  val mutable in_invariant = false
   val mutable in_quantif = false
 
   method get_mutations() = mutations
@@ -80,9 +81,9 @@ class gatherer funcname = object(self)
       match bhv.b_post_cond with
       | (_,h)::_ as l
 	  when Mut_options.Mut_Spec.get() && loc_ok h.ip_content.pred_loc ->
-	 postcond_or_invariant <- true;
+	 in_postcond <- true;
 	 List.iter add l;
-	 Cil.DoChildrenPost (fun x -> postcond_or_invariant <- false; x)
+	 Cil.DoChildrenPost (fun x -> in_postcond <- false; x)
       | _ -> Cil.DoChildren
     else (* for main function: only mutate postcondition predicates *)
       let f (_,h) = ignore (self#videntified_predicate h) in
@@ -92,9 +93,9 @@ class gatherer funcname = object(self)
   method! vcode_annot ca = match ca.annot_content with
   | AInvariant(_,b,p)
       when Mut_options.Mut_Spec.get() && b && loc_ok p.pred_loc ->
-     postcond_or_invariant <- true;
+     in_invariant <- true;
      self#add (Mut_LoopInv p);
-     Cil.DoChildrenPost (fun x -> postcond_or_invariant <- false; x)
+     Cil.DoChildrenPost (fun x -> in_invariant <- false; x)
   | AVariant(t,_) ->
      let neg t = Logic_const.term (TUnOp(Neg,t)) t.term_type in
      let add t x = Logic_const.term (TBinOp(PlusA,t,x)) t.term_type in
@@ -129,7 +130,7 @@ class gatherer funcname = object(self)
     let add o = self#add (Mut_Prel (r, o, p.pred_loc)) in
     List.iter add (other_relations r);
     begin
-      if postcond_or_invariant && not in_quantif then
+      if (in_postcond || in_invariant) && not in_quantif then
 	let l = [1;2;3] in
 	match r with
 	| Rle
