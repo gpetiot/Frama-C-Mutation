@@ -14,6 +14,7 @@ type mutation =
   | Mut_Post of identified_predicate
   | Mut_Term of term * term * location
   | Mut_Variant of term * term * location
+  | Mut_And of predicate * bool * location
 
 let pp_aux fmt f e1 e2 loc =
   Format.fprintf fmt "%a: `%a` --> `%a`" Printer.pp_location loc f e1 f e2
@@ -30,6 +31,10 @@ let pp_mutation fmt = function
     Printer.pp_location p.ip_content.pred_loc Printer.pp_identified_predicate p
   | Mut_Term(t1,t2,loc) -> pp_aux fmt Printer.pp_term t1 t2 loc
   | Mut_Variant(t1,t2,loc) -> pp_aux fmt Printer.pp_term t1 t2 loc
+  | Mut_And (p,b,loc) ->
+     let side = if b then "left" else "right" in
+     Format.fprintf fmt "%a: %a cut %s"
+       Printer.pp_location loc Printer.pp_predicate p side
 
 
 let other_binops = function
@@ -145,6 +150,13 @@ class gatherer funcname = object(self)
   | Pnot(p2) when Mut_options.Mut_Spec.get() && loc_ok p.pred_loc ->
     self#add (Mut_Pnot (p, p2, p.pred_loc));
     Cil.DoChildren
+  | Pand _ when Mut_options.Mut_Spec.get() && loc_ok p.pred_loc ->
+     if in_invariant && not in_quantif then
+       begin
+	 self#add (Mut_And (p, true, p.pred_loc));
+	 self#add (Mut_And (p, false, p.pred_loc))
+       end;
+    Cil.DoChildren
   | _ -> Cil.DoChildren
 
   method! vterm t = match t.term_node with
@@ -234,6 +246,8 @@ class mutation_visitor prj mut = object
      Cil.ChangeDoChildrenPost (p, fun _ -> Logic_const.prel (r,x,b))
   | Pnot(_), Mut_Pnot(_,y,l) when same_locs p.pred_loc l ->
     Cil.ChangeDoChildrenPost (p, fun _ -> y)
+  | Pand(p1,p2), Mut_And(_,side,l) when same_locs p.pred_loc l ->
+    Cil.ChangeDoChildrenPost (p, fun _ -> if side then p2 else p1)
   | _ -> Cil.DoChildren
 
   method! vterm term = match term.term_node, mut with
