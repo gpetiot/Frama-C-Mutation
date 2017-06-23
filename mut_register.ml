@@ -340,7 +340,7 @@ let rec mutate fct cpt recap = function
        cw_detected=Not_tried; stady_time=None;} in
     let cmd =
       Printf.sprintf
-	"frama-c %s -wp -wp-out . -wp-timeout %i -wp-prover alt-ergo,cvc3 | \
+	"frama-c %s -wp -wp-prop=-@lemmas -wp-out . -wp-timeout %i -wp-prover alt-ergo,cvc3 | \
 	 tee -a %s | grep Proved | $(%s)"
 	file wp_timeout log_file sed_cmd in
     let begin_wp_time = CalendarLib.Ftime.now() in
@@ -436,7 +436,7 @@ let run() =
     (* WP on initial program *)
     let cmd =
       Printf.sprintf
-	"frama-c %s -wp -wp-out . -wp-timeout %i -wp-prover alt-ergo,cvc3 | \
+	"frama-c %s -wp -wp-prop=-@lemmas -wp-out . -wp-timeout %i -wp-prover alt-ergo,cvc3 | \
 	 grep Proved | $(%s)"
 	filename wp_timeout sed_cmd in
     let begin_time = CalendarLib.Ftime.now() in
