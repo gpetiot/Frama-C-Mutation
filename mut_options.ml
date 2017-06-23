@@ -22,6 +22,11 @@ module Mut_Spec = Self.True (struct
   let help = "perform mutations on the ACSL specification"
 end)
 
+module Generate_Only = Self.False (struct
+  let option_name = "-mut-generate-only"
+  let help = "only generate mutants (do not run analyses)"
+end)
+
 module Only = Self.Int (struct
   let option_name = "-mut-only"
   let help = "only perform a given mutation (designated by its number)"
