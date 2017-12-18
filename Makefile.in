@@ -19,32 +19,8 @@ PLUGIN_NAME := Mutation
 PLUGIN_CMO := local_config mut_options mut_register
 PLUGIN_GUI_CMO 	:= 
 PLUGIN_HAS_MLI:= yes
-PLUGIN_DEPENDENCIES:=StaDy RteGen
 PLUGIN_TESTS_DIRS:= search
-PLUGIN_PTESTS_OPTS :=
 PLUGIN_GENERATED:= $(PLUGIN_DIR)/local_config.ml
-
-# OCAMLFIND:=$(shell which ocamlfind)
-
-# ifneq ("$(OCAMLFIND)","")
-#   CALENDAR_PATH:=$(shell $(OCAMLFIND) query calendar)
-#   ifeq ("$(CALENDAR_PATH)","")
-#     CALENDAR_PATH:=$(shell ocamlc -where)
-#   else
-#     PLUGIN_BFLAGS:=-I $(CALENDAR_PATH)
-#     PLUGIN_OFLAGS:=-I $(CALENDAR_PATH)
-#     PLUGIN_DOCFLAGS:=-I $(CALENDAR_PATH)
-#   endif
-# else
-#   CALENDAR_PATH:=$(shell ocamlc -where)
-# endif
-
-PLUGIN_BFLAGS:=-I @CALENDAR_PATH@
-PLUGIN_OFLAGS:=-I @CALENDAR_PATH@
-PLUGIN_DOCFLAGS:=-I @CALENDAR_PATH@
-
-PLUGIN_EXTRA_BYTE:= @CALENDAR_PATH@/calendarLib.cma
-PLUGIN_EXTRA_OPT:= @CALENDAR_PATH@/calendarLib.cmxa
 
 $(PLUGIN_DIR)/tests/test_config: $(PLUGIN_DIR)/tests/test_config.in
 	$(PRINT_MAKING) $@

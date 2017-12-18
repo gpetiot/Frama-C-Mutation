@@ -13,9 +13,6 @@ m4_ifndef([FRAMAC_M4_MACROS], [m4_include(FRAMAC_SHARE/configure.ac)])
 check_plugin(mutation,PLUGIN_RELATIVE_PATH(plugin_file),
 	     [support for Mutation plug-in],yes,yes)
 
-plugin_require(mutation,StaDy)
-plugin_require(mutation,RteGen)
-check_plugin_dependencies
 
 # Check Frama-C version
 #######################
@@ -66,58 +63,6 @@ if test -z $HAVE_STDIO_H; then
   AC_MSG_WARN([stdio.h missing: non-regression tests unavailable.])
 fi
 
-#############
-# ocamlfind #
-#############
-
-AC_CHECK_PROG(OCAMLC,ocamlc,ocamlc,no) # setting $OCAMLC
-OCAMLLIB=`$OCAMLC -where | tr -d '\\r'` # setting $OCAMLLIB
-AC_CHECK_PROG(OCAMLFIND,ocamlfind,ocamlfind,no) # setting $OCAMLFIND
-
-if test "$OCAMLFIND" = "no" ; then
-   echo "No ocamlfind detected"
-else
-   OCAMLLIB_BY_FINDLIB=`ocamlfind printconf stdlib | tr -d '\\r'`
-   if test "$OCAMLLIB_BY_FINDLIB" = "$OCAMLLIB" ; then
-      echo "OCamlfind detected and enabled"
-   else
-      echo "OCamlfind detected but disabled. Standard libraries differ:"
-      echo "  ocamlc: '$OCAMLLIB'"
-      echo "  ocamlfind: '$OCAMLLIB_BY_FINDLIB'"
-      OCAMLFIND="no"
-   fi
-fi
-
-# Calendar
-###########
-
-CALENDAR=calendar.cma;
-AC_MSG_CHECKING(calendar);
-HAS_CALENDAR=false;
-
-# trying to find calendar with ocamlfind
-CALENDAR_PATH=$($OCAMLFIND query calendar 2>/dev/null | tr -d '\r\n');
-if test "$OCAMLFIND" != "no"; then
-   if test -z "$CALENDAR_PATH"; then
-      echo "calandar not found by ocamlfind";
-   else
-      HAS_CALENDAR=true;
-      AC_MSG_RESULT($CALENDAR_PATH);
-   fi;
-fi;
-
-# trying to find calendar with ocamlc -where
-if [ ! "$HAS_CALENDAR" ]; then
-  if [ ls `ocamlc -where`/../calendar/calendarLib.cma ]; then
-    HAS_CALENDAR=true;
-    AC_MSG_RESULT($CALENDAR);
-  fi;
-fi;
-
-# not found
-if [ ! "$HAS_CALENDAR" ]; then
-    AC_MSG_ERROR($CALENDAR not found);
-fi;
 
 #######################
 # Generating Makefile #
@@ -125,6 +70,5 @@ fi;
 
 AC_SUBST(MAY_RUN_TESTS)
 AC_SUBST(OCAMLVERSION)
-AC_SUBST(CALENDAR_PATH)
 
 write_plugin_config(Makefile)
