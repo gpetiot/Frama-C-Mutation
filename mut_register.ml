@@ -223,7 +223,7 @@ class mutation_visitor prj mut = object
     let l = List.filter (fun (_,p) -> p.ip_id <> m.ip_id) bhv.b_post_cond in
     (*Cil.ChangeDoChildrenPost (bhv, fun b -> {b with b_post_cond = l})*)
     Cil.ChangeTo {bhv with b_post_cond = l}
-  | _ -> Cil.DoChildren
+  | _ -> Cil.JustCopy
 
   method! vcode_annot ca = match ca.annot_content, mut with
   | AInvariant(_,linv,p), Mut_LoopInv m
@@ -233,7 +233,7 @@ class mutation_visitor prj mut = object
   | AVariant (t, str), Mut_Variant (_t1,t2,l) when same_locs t.term_loc l ->
      let ca2 = AVariant (t2, str) in
      Cil.ChangeDoChildrenPost (ca, fun _ -> Logic_const.new_code_annotation ca2)
-  | _ -> Cil.DoChildren
+  | _ -> Cil.JustCopy
 
   method! vpredicate p = match p.pred_content, mut with
   | Prel(r,x,y), Mut_Prel(w,z,l) when same_locs p.pred_loc l && r = w ->
@@ -248,39 +248,38 @@ class mutation_visitor prj mut = object
     Cil.ChangeDoChildrenPost (p, fun _ -> y)
   | Pand(p1,p2), Mut_And(_,side,l) when same_locs p.pred_loc l ->
     Cil.ChangeDoChildrenPost (p, fun _ -> if side then p2 else p1)
-  | _ -> Cil.DoChildren
+  | _ -> Cil.JustCopy
 
   method! vterm term = match term.term_node, mut with
   | TBinOp(o,x,y), Mut_TBinOp(w,z,l) when same_locs term.term_loc l && o = w ->
     Cil.ChangeDoChildrenPost
       (term, fun t -> Logic_const.term (TBinOp(z,x,y)) t.term_type)
-  | _ -> Cil.DoChildren
+  | _ -> Cil.JustCopy
 
   method! vexpr exp = match exp.enode, mut with
   | BinOp (o1,x,y,t), Mut_BinOp (o2,z,l) when same_locs exp.eloc l && o1 = o2 ->
     Cil.ChangeDoChildrenPost (exp, fun e -> Cil.new_exp e.eloc (BinOp(z,x,y,t)))
-  | _ -> Cil.DoChildren
+  | _ -> Cil.JustCopy
 
   method! vstmt_aux stmt = match stmt.skind, mut with
   | If (e, x, y, loc), Mut_If (_, _, l) when same_locs loc l ->
     let e = Cil.new_exp loc (UnOp (LNot, e, Cil.intType)) in
     Cil.ChangeDoChildrenPost (stmt, fun s -> {s with skind = If (e, x, y, loc)})
-  | _ -> Cil.DoChildren
+  | _ -> Cil.JustCopy
 end
 
 
-let rec mutate fct cpt = function
+let rec mutate summary_file fct cpt = function
   | [] -> ()
   | _ when Mut_options.Only.get() <> -1 && Mut_options.Only.get() < cpt -> ()
   | _::t when Mut_options.Only.get() <> -1 && Mut_options.Only.get() > cpt ->
-    mutate fct (cpt+1) t
+    mutate summary_file fct (cpt+1) t
   | h::t ->
     let file = "mutant_" ^ (string_of_int cpt) ^ ".c" in
-    (*
     let dkey = Mut_options.dkey_progress in
-    if not (Mut_options.Generate_Only.get()) then
-      Mut_options.Self.feedback ~dkey "mutant %i %a" cpt pp_mutation h;
-    *)
+    Mut_options.Self.feedback ~dkey "mutant %i %a" cpt pp_mutation h;
+    let str_mutation = Format.asprintf "%a" pp_mutation h in
+    Printf.fprintf summary_file "%s,%s\n" file str_mutation;
     let f p = new mutation_visitor p h in
     let project = File.create_project_from_visitor "__mut_tmp" f in
     Project.copy ~selection:(Parameter_state.get_selection()) project;
@@ -304,9 +303,7 @@ let rec mutate fct cpt = function
     in
     Project.on project print_in_file ();
     Project.remove ~project ();
-    mutate fct (cpt+1) t
-
-
+    mutate summary_file fct (cpt+1) t
 
 let run() =
   if Mut_options.Enabled.get() then
@@ -318,10 +315,11 @@ let run() =
     let n_mutations = List.length mutations in
     let dkey = Mut_options.dkey_progress in
     Mut_options.Self.feedback ~dkey "%i mutants" n_mutations;
-    mutate funcname 0 mutations
-    
+    let summary_file = open_out (Mut_options.Summary_File.get()) in
+    mutate summary_file funcname 0 mutations;
+    flush summary_file;
+    close_out summary_file
 
-	
 let run =
   let deps = [Ast.self; Mut_options.Enabled.self] in
   let f, _self = State_builder.apply_once "mutation" deps run in

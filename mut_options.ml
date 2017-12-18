@@ -29,6 +29,13 @@ module Only = Self.Int (struct
   let default = -1
 end)
 
+module Summary_File = Self.String (struct
+  let option_name = "-mut-summary-file"
+  let help = "write the summary of generated mutations in a file"
+  let arg_name = "F"
+  let default = "summary.csv"
+end)
+
 (* StaDy *)
 
 module Contract_weakness_detection =
