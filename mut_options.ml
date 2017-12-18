@@ -36,16 +36,6 @@ module Summary_File = Self.String (struct
   let default = "summary.csv"
 end)
 
-(* StaDy *)
-
-module Contract_weakness_detection =
-  Self.String_list
-    (struct
-      let option_name = "-mut-cwd"
-      let help = "identifiers of statement to check for contract weakness"
-      let arg_name = "i,..."
-    end)
-
 (* Debug Keys *)
 
 let dkey_progress = Self.register_category "progress"
