@@ -19,7 +19,7 @@ void search(int *t, int x)
     i ++;
   }
   /*@
-  assert found != 0 <==> (\exists integer i; 0 <= i <= 4 && *(t + i) == x);
+  assert found != 0 <==> (\exists integer i; 0 <= i <= 4 && *(t + i) != x);
    */
   ;
   return;
@@ -45,7 +45,7 @@ void search(int *t, int x)
     i ++;
   }
   /*@
-  assert found != 0 <==> (\exists integer i; 0 <= i <= 4 && *(t + i) == x);
+  assert found == 0 <==> (\exists integer i; 0 <= i <= 4 && *(t + i) == x);
    */
   ;
   return;
@@ -63,7 +63,7 @@ void search(int *t, int x)
   i = 0;
   /*@ loop invariant 0 <= i <= 5;
       loop invariant
-        found != 0 <==> (\exists integer k; 0 <= k < i && *(t + k) == x);
+        found != 0 <==> (\exists integer k; 0 <= k < i && *(t + k) != x);
       loop assigns found, i;
   */
   while (i <= 4) {
@@ -89,7 +89,7 @@ void search(int *t, int x)
   i = 0;
   /*@ loop invariant 0 <= i <= 5;
       loop invariant
-        found != 0 <==> (\exists integer k; 0 <= k < i && *(t + k) == x);
+        found == 0 <==> (\exists integer k; 0 <= k < i && *(t + k) == x);
       loop assigns found, i;
   */
   while (i <= 4) {
@@ -117,9 +117,8 @@ void search(int *t, int x)
   int found = 0;
   i = 0;
   /*@ loop invariant 0 <= i <= 5;
-      loop invariant
-        found != 0 <==> (\exists integer k; 0 <= k < i && *(t + k) == x);
       loop assigns found, i;
+      loop invariant \true;
   */
   while (i <= 4) {
     if (*(t + i) == x) found = 1;
@@ -142,7 +141,7 @@ void search(int *t, int x)
   int i;
   int found = 0;
   i = 0;
-  /*@ loop invariant 0 <= i <= 5;
+  /*@ loop invariant 0 <= i <= 5 + 3;
       loop invariant
         found != 0 <==> (\exists integer k; 0 <= k < i && *(t + k) == x);
       loop assigns found, i;
@@ -168,7 +167,7 @@ void search(int *t, int x)
   int i;
   int found = 0;
   i = 0;
-  /*@ loop invariant 0 <= i <= 5;
+  /*@ loop invariant 0 <= i <= 5 + 2;
       loop invariant
         found != 0 <==> (\exists integer k; 0 <= k < i && *(t + k) == x);
       loop assigns found, i;
@@ -194,7 +193,7 @@ void search(int *t, int x)
   int i;
   int found = 0;
   i = 0;
-  /*@ loop invariant 0 <= i <= 5;
+  /*@ loop invariant 0 <= i <= 5 + 1;
       loop invariant
         found != 0 <==> (\exists integer k; 0 <= k < i && *(t + k) == x);
       loop assigns found, i;
@@ -220,7 +219,7 @@ void search(int *t, int x)
   int i;
   int found = 0;
   i = 0;
-  /*@ loop invariant 0 <= i <= 5;
+  /*@ loop invariant 0 <= i && i != 5;
       loop invariant
         found != 0 <==> (\exists integer k; 0 <= k < i && *(t + k) == x);
       loop assigns found, i;
@@ -246,7 +245,7 @@ void search(int *t, int x)
   int i;
   int found = 0;
   i = 0;
-  /*@ loop invariant 0 <= i <= 5;
+  /*@ loop invariant 0 <= i == 5;
       loop invariant
         found != 0 <==> (\exists integer k; 0 <= k < i && *(t + k) == x);
       loop assigns found, i;
@@ -272,7 +271,7 @@ void search(int *t, int x)
   int i;
   int found = 0;
   i = 0;
-  /*@ loop invariant 0 <= i <= 5;
+  /*@ loop invariant 0 <= i && i >= 5;
       loop invariant
         found != 0 <==> (\exists integer k; 0 <= k < i && *(t + k) == x);
       loop assigns found, i;
@@ -298,7 +297,7 @@ void search(int *t, int x)
   int i;
   int found = 0;
   i = 0;
-  /*@ loop invariant 0 <= i <= 5;
+  /*@ loop invariant 0 <= i && i > 5;
       loop invariant
         found != 0 <==> (\exists integer k; 0 <= k < i && *(t + k) == x);
       loop assigns found, i;
@@ -324,7 +323,7 @@ void search(int *t, int x)
   int i;
   int found = 0;
   i = 0;
-  /*@ loop invariant 0 <= i <= 5;
+  /*@ loop invariant 0 <= i < 5;
       loop invariant
         found != 0 <==> (\exists integer k; 0 <= k < i && *(t + k) == x);
       loop assigns found, i;
@@ -350,7 +349,7 @@ void search(int *t, int x)
   int i;
   int found = 0;
   i = 0;
-  /*@ loop invariant 0 <= i <= 5;
+  /*@ loop invariant 0 <= i + 3 && i <= 5;
       loop invariant
         found != 0 <==> (\exists integer k; 0 <= k < i && *(t + k) == x);
       loop assigns found, i;
@@ -376,7 +375,7 @@ void search(int *t, int x)
   int i;
   int found = 0;
   i = 0;
-  /*@ loop invariant 0 <= i <= 5;
+  /*@ loop invariant 0 <= i + 2 && i <= 5;
       loop invariant
         found != 0 <==> (\exists integer k; 0 <= k < i && *(t + k) == x);
       loop assigns found, i;
@@ -402,7 +401,7 @@ void search(int *t, int x)
   int i;
   int found = 0;
   i = 0;
-  /*@ loop invariant 0 <= i <= 5;
+  /*@ loop invariant 0 <= i + 1 && i <= 5;
       loop invariant
         found != 0 <==> (\exists integer k; 0 <= k < i && *(t + k) == x);
       loop assigns found, i;
@@ -428,7 +427,7 @@ void search(int *t, int x)
   int i;
   int found = 0;
   i = 0;
-  /*@ loop invariant 0 <= i <= 5;
+  /*@ loop invariant 0 != i && i <= 5;
       loop invariant
         found != 0 <==> (\exists integer k; 0 <= k < i && *(t + k) == x);
       loop assigns found, i;
@@ -454,7 +453,7 @@ void search(int *t, int x)
   int i;
   int found = 0;
   i = 0;
-  /*@ loop invariant 0 <= i <= 5;
+  /*@ loop invariant 0 == i <= 5;
       loop invariant
         found != 0 <==> (\exists integer k; 0 <= k < i && *(t + k) == x);
       loop assigns found, i;
@@ -480,7 +479,7 @@ void search(int *t, int x)
   int i;
   int found = 0;
   i = 0;
-  /*@ loop invariant 0 <= i <= 5;
+  /*@ loop invariant 0 >= i && i <= 5;
       loop invariant
         found != 0 <==> (\exists integer k; 0 <= k < i && *(t + k) == x);
       loop assigns found, i;
@@ -506,7 +505,7 @@ void search(int *t, int x)
   int i;
   int found = 0;
   i = 0;
-  /*@ loop invariant 0 <= i <= 5;
+  /*@ loop invariant 0 > i && i <= 5;
       loop invariant
         found != 0 <==> (\exists integer k; 0 <= k < i && *(t + k) == x);
       loop assigns found, i;
@@ -532,7 +531,7 @@ void search(int *t, int x)
   int i;
   int found = 0;
   i = 0;
-  /*@ loop invariant 0 <= i <= 5;
+  /*@ loop invariant 0 < i <= 5;
       loop invariant
         found != 0 <==> (\exists integer k; 0 <= k < i && *(t + k) == x);
       loop assigns found, i;
@@ -558,7 +557,7 @@ void search(int *t, int x)
   int i;
   int found = 0;
   i = 0;
-  /*@ loop invariant 0 <= i <= 5;
+  /*@ loop invariant 0 <= i;
       loop invariant
         found != 0 <==> (\exists integer k; 0 <= k < i && *(t + k) == x);
       loop assigns found, i;
@@ -584,7 +583,7 @@ void search(int *t, int x)
   int i;
   int found = 0;
   i = 0;
-  /*@ loop invariant 0 <= i <= 5;
+  /*@ loop invariant i <= 5;
       loop invariant
         found != 0 <==> (\exists integer k; 0 <= k < i && *(t + k) == x);
       loop assigns found, i;
@@ -610,10 +609,10 @@ void search(int *t, int x)
   int i;
   int found = 0;
   i = 0;
-  /*@ loop invariant 0 <= i <= 5;
-      loop invariant
+  /*@ loop invariant
         found != 0 <==> (\exists integer k; 0 <= k < i && *(t + k) == x);
       loop assigns found, i;
+      loop invariant \true;
   */
   while (i <= 4) {
     if (*(t + i) == x) found = 1;
@@ -643,7 +642,7 @@ void search(int *t, int x)
   */
   while (i <= 4) {
     if (*(t + i) == x) found = 1;
-    i ++;
+    i *= 1;
   }
   /*@
   assert found != 0 <==> (\exists integer i; 0 <= i <= 4 && *(t + i) == x);
@@ -669,7 +668,7 @@ void search(int *t, int x)
   */
   while (i <= 4) {
     if (*(t + i) == x) found = 1;
-    i ++;
+    i --;
   }
   /*@
   assert found != 0 <==> (\exists integer i; 0 <= i <= 4 && *(t + i) == x);
@@ -694,7 +693,7 @@ void search(int *t, int x)
       loop assigns found, i;
   */
   while (i <= 4) {
-    if (*(t + i) == x) found = 1;
+    if (*(t + i) != x) found = 1;
     i ++;
   }
   /*@
@@ -720,7 +719,7 @@ void search(int *t, int x)
       loop assigns found, i;
   */
   while (i <= 4) {
-    if (*(t + i) == x) found = 1;
+    if (! (*(t + i) == x)) found = 1;
     i ++;
   }
   /*@
@@ -745,7 +744,7 @@ void search(int *t, int x)
         found != 0 <==> (\exists integer k; 0 <= k < i && *(t + k) == x);
       loop assigns found, i;
   */
-  while (i <= 4) {
+  while (i < 4) {
     if (*(t + i) == x) found = 1;
     i ++;
   }
@@ -771,7 +770,7 @@ void search(int *t, int x)
         found != 0 <==> (\exists integer k; 0 <= k < i && *(t + k) == x);
       loop assigns found, i;
   */
-  while (i <= 4) {
+  while (i != 4) {
     if (*(t + i) == x) found = 1;
     i ++;
   }
@@ -797,7 +796,7 @@ void search(int *t, int x)
         found != 0 <==> (\exists integer k; 0 <= k < i && *(t + k) == x);
       loop assigns found, i;
   */
-  while (i <= 4) {
+  while (i == 4) {
     if (*(t + i) == x) found = 1;
     i ++;
   }
@@ -823,7 +822,7 @@ void search(int *t, int x)
         found != 0 <==> (\exists integer k; 0 <= k < i && *(t + k) == x);
       loop assigns found, i;
   */
-  while (i <= 4) {
+  while (i >= 4) {
     if (*(t + i) == x) found = 1;
     i ++;
   }
@@ -849,7 +848,7 @@ void search(int *t, int x)
         found != 0 <==> (\exists integer k; 0 <= k < i && *(t + k) == x);
       loop assigns found, i;
   */
-  while (i <= 4) {
+  while (i > 4) {
     if (*(t + i) == x) found = 1;
     i ++;
   }
@@ -875,7 +874,7 @@ void search(int *t, int x)
         found != 0 <==> (\exists integer k; 0 <= k < i && *(t + k) == x);
       loop assigns found, i;
   */
-  while (i <= 4) {
+  while (! (i <= 4)) {
     if (*(t + i) == x) found = 1;
     i ++;
   }
