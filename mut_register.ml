@@ -5,15 +5,15 @@ open Cil_types
 type mutation =
   (* mutations on code *)
   | Mut_BinOp of binop * binop * location
-  | Mut_If of exp * exp * location
+  | Mut_If of exp * (exp -> exp) * location
   (* mutations on spec *)
   | Mut_TBinOp of binop * binop * location
   | Mut_Prel of relation * relation * location
-  | Mut_Pnot of predicate * predicate * location
+  | Mut_Pnot of predicate * location
   | Mut_LoopInv of predicate
   | Mut_Post of identified_predicate
-  | Mut_Term of term * term * location
-  | Mut_Variant of term * term * location
+  | Mut_Term of term * (term -> term) * location
+  | Mut_Variant of term * (term -> term) * location
   | Mut_And of predicate * bool * location
 
 let pp_aux fmt f e1 e2 loc =
@@ -22,15 +22,16 @@ let pp_aux fmt f e1 e2 loc =
 let pp_mutation fmt = function
   | Mut_TBinOp(b1,b2,loc)
   | Mut_BinOp(b1,b2,loc) -> pp_aux fmt Printer.pp_binop b1 b2 loc
-  | Mut_If(e1,e2,loc) -> pp_aux fmt Printer.pp_exp e1 e2 loc
+  | Mut_If(e1,f,loc) -> pp_aux fmt Printer.pp_exp e1 (f e1) loc
   | Mut_Prel(r1,r2,loc) -> pp_aux fmt Printer.pp_relation r1 r2 loc
-  | Mut_Pnot(p1,p2,loc) -> pp_aux fmt Printer.pp_predicate p1 p2 loc
+  | Mut_Pnot(p,loc) -> Format.fprintf fmt "%a: ! (%a)"
+     Printer.pp_location p.pred_loc Printer.pp_predicate p
   | Mut_LoopInv p -> Format.fprintf fmt "%a: - loop invariant %a"
     Printer.pp_location p.pred_loc Printer.pp_predicate p
   | Mut_Post p -> Format.fprintf fmt "%a: - ensures %a"
     Printer.pp_location p.ip_content.pred_loc Printer.pp_identified_predicate p
-  | Mut_Term(t1,t2,loc) -> pp_aux fmt Printer.pp_term t1 t2 loc
-  | Mut_Variant(t1,t2,loc) -> pp_aux fmt Printer.pp_term t1 t2 loc
+  | Mut_Term(t1,f,loc) -> pp_aux fmt Printer.pp_term t1 (f t1) loc
+  | Mut_Variant(t1,f,loc) -> pp_aux fmt Printer.pp_term t1 (f t1) loc
   | Mut_And (p,b,loc) ->
      let side = if b then "left" else "right" in
      Format.fprintf fmt "%a: %a cut %s"
@@ -103,24 +104,25 @@ class gatherer funcname = object(self)
      Cil.DoChildrenPost (fun x -> in_invariant <- false; x)
   | AVariant(t,_) ->
      let neg t = Logic_const.term (TUnOp(Neg,t)) t.term_type in
-     let add t x = Logic_const.term (TBinOp(PlusA,t,x)) t.term_type in
-     let sub t x = Logic_const.term (TBinOp(MinusA,t,x)) t.term_type in
+     let add x t = Logic_const.term (TBinOp(PlusA,t,x)) t.term_type in
+     let sub x t = Logic_const.term (TBinOp(MinusA,t,x)) t.term_type in
+     let nadd x t = neg (add x t) and nsub x t = neg (sub x t) in
      (* v -> v +/- 1, 5, 10 *)
-     self#add (Mut_Variant(t, add t (Logic_const.tinteger 1), t.term_loc));
-     self#add (Mut_Variant(t, sub t (Logic_const.tinteger 1), t.term_loc));
-     self#add (Mut_Variant(t, add t (Logic_const.tinteger 5), t.term_loc));
-     self#add (Mut_Variant(t, sub t (Logic_const.tinteger 5), t.term_loc));
-     self#add (Mut_Variant(t, add t (Logic_const.tinteger 10), t.term_loc));
-     self#add (Mut_Variant(t, sub t (Logic_const.tinteger 10), t.term_loc));
+     self#add (Mut_Variant(t, add (Logic_const.tinteger 1), t.term_loc));
+     self#add (Mut_Variant(t, sub (Logic_const.tinteger 1), t.term_loc));
+     self#add (Mut_Variant(t, add (Logic_const.tinteger 5), t.term_loc));
+     self#add (Mut_Variant(t, sub (Logic_const.tinteger 5), t.term_loc));
+     self#add (Mut_Variant(t, add (Logic_const.tinteger 10), t.term_loc));
+     self#add (Mut_Variant(t, sub (Logic_const.tinteger 10), t.term_loc));
      (* v -> -v *)
-     self#add (Mut_Variant(t, neg t, t.term_loc));
+     self#add (Mut_Variant(t, neg, t.term_loc));
      (* v -> - v +/- 1, 5, 10 *)
-     self#add (Mut_Variant(t, neg(add t(Logic_const.tinteger 1)), t.term_loc));
-     self#add (Mut_Variant(t, neg(sub t(Logic_const.tinteger 1)), t.term_loc));
-     self#add (Mut_Variant(t, neg(add t(Logic_const.tinteger 5)), t.term_loc));
-     self#add (Mut_Variant(t, neg(sub t(Logic_const.tinteger 5)), t.term_loc));
-     self#add (Mut_Variant(t, neg(add t(Logic_const.tinteger 10)), t.term_loc));
-     self#add (Mut_Variant(t, neg(sub t(Logic_const.tinteger 10)), t.term_loc));
+     self#add (Mut_Variant(t, nadd (Logic_const.tinteger 1), t.term_loc));
+     self#add (Mut_Variant(t, nsub (Logic_const.tinteger 1), t.term_loc));
+     self#add (Mut_Variant(t, nadd (Logic_const.tinteger 5), t.term_loc));
+     self#add (Mut_Variant(t, nsub (Logic_const.tinteger 5), t.term_loc));
+     self#add (Mut_Variant(t, nadd (Logic_const.tinteger 10), t.term_loc));
+     self#add (Mut_Variant(t, nsub (Logic_const.tinteger 10), t.term_loc));
      Cil.DoChildren
   | _ -> Cil.DoChildren
 
@@ -140,15 +142,15 @@ class gatherer funcname = object(self)
 	match r with
 	| Rle
 	| Rlt ->
-	   List.iter(fun i -> self#add (Mut_Term(t2,(add_i i t2),p.pred_loc))) l
+	   List.iter(fun i -> self#add (Mut_Term(t2,(add_i i),p.pred_loc))) l
 	| Rge
 	| Rgt ->
-	   List.iter(fun i -> self#add (Mut_Term(t1,(add_i i t1),p.pred_loc))) l
+	   List.iter(fun i -> self#add (Mut_Term(t1,(add_i i),p.pred_loc))) l
 	| _ -> ()
     end;
     Cil.DoChildren
-  | Pnot(p2) when Mut_options.Mut_Spec.get() && loc_ok p.pred_loc ->
-    self#add (Mut_Pnot (p, p2, p.pred_loc));
+  | Pnot _ when Mut_options.Mut_Spec.get() && loc_ok p.pred_loc ->
+    self#add (Mut_Pnot (p, p.pred_loc));
     Cil.DoChildren
   | Pand _ when Mut_options.Mut_Spec.get() && loc_ok p.pred_loc ->
      if in_invariant && not in_quantif then
@@ -177,8 +179,8 @@ class gatherer funcname = object(self)
 
   method! vstmt_aux stmt = match stmt.skind with
   | If (exp, _, _, loc) when Mut_options.Mut_Code.get() ->
-    let new_bool = Cil.new_exp loc (UnOp (LNot, exp, Cil.intType)) in
-    self#add (Mut_If(exp, new_bool, loc));
+    let new_e exp = Cil.new_exp loc (UnOp (LNot, exp, Cil.intType)) in
+    self#add (Mut_If(exp, new_e, loc));
     Cil.DoChildren
   | _ -> Cil.DoChildren
 
@@ -218,54 +220,62 @@ let same_locs l1 l2 = (Cil_datatype.Location.compare l1 l2) = 0
 class mutation_visitor prj mut = object
   inherit Visitor.frama_c_copy prj
 
-  method! vbehavior bhv = match mut with
-  | Mut_Post m ->
-    let l = List.filter (fun (_,p) -> p.ip_id <> m.ip_id) bhv.b_post_cond in
-    (*Cil.ChangeDoChildrenPost (bhv, fun b -> {b with b_post_cond = l})*)
-    Cil.ChangeTo {bhv with b_post_cond = l}
-  | _ -> Cil.JustCopy
+  method! vbehavior bhv =
+    let f bhv = match mut with
+      | Mut_Post m ->
+	 {bhv with b_post_cond =
+	     List.filter (fun (_,p) -> p.ip_id <> m.ip_id) bhv.b_post_cond }
+      | _ -> bhv
+    in Cil.ChangeDoChildrenPost (bhv, f)
 
-  method! vcode_annot ca = match ca.annot_content, mut with
-  | AInvariant(_,linv,p), Mut_LoopInv m
-    when linv && same_locs p.pred_loc m.pred_loc ->
-     let ca2 = AInvariant([],true,Logic_const.ptrue) in
-     Cil.ChangeDoChildrenPost (ca, fun _ -> Logic_const.new_code_annotation ca2)
-  | AVariant (t, str), Mut_Variant (_t1,t2,l) when same_locs t.term_loc l ->
-     let ca2 = AVariant (t2, str) in
-     Cil.ChangeDoChildrenPost (ca, fun _ -> Logic_const.new_code_annotation ca2)
-  | _ -> Cil.JustCopy
+  method! vcode_annot ca =
+    let f ca = match ca.annot_content, mut with
+      | AInvariant(_,linv,p), Mut_LoopInv m
+	when linv && same_locs p.pred_loc m.pred_loc ->
+	 Logic_const.new_code_annotation (AInvariant([],true,Logic_const.ptrue))
+      | AVariant (t, str), Mut_Variant (_,f,l) when same_locs t.term_loc l ->
+	 Logic_const.new_code_annotation (AVariant (f t, str))
+      | _ -> ca
+    in Cil.ChangeDoChildrenPost (ca, f)
 
-  method! vpredicate p = match p.pred_content, mut with
-  | Prel(r,x,y), Mut_Prel(w,z,l) when same_locs p.pred_loc l && r = w ->
-    Cil.ChangeDoChildrenPost (p, fun _ -> Logic_const.prel (z,x,y))
-  | Prel(r,x,y), Mut_Term(a,b,l)
-       when same_locs p.pred_loc l && x.term_loc = a.term_loc ->
-     Cil.ChangeDoChildrenPost (p, fun _ -> Logic_const.prel (r,b,y))
-  | Prel(r,x,y), Mut_Term(a,b,l)
-       when same_locs p.pred_loc l && y.term_loc = a.term_loc ->
-     Cil.ChangeDoChildrenPost (p, fun _ -> Logic_const.prel (r,x,b))
-  | Pnot(_), Mut_Pnot(_,y,l) when same_locs p.pred_loc l ->
-    Cil.ChangeDoChildrenPost (p, fun _ -> y)
-  | Pand(p1,p2), Mut_And(_,side,l) when same_locs p.pred_loc l ->
-    Cil.ChangeDoChildrenPost (p, fun _ -> if side then p2 else p1)
-  | _ -> Cil.JustCopy
+  method! vpredicate p =
+    let f p = match p.pred_content, mut with
+      | Prel(r,x,y), Mut_Prel(w,z,l) when same_locs p.pred_loc l && r = w ->
+	 Logic_const.prel (z,x,y)
+      | Prel(r,x,y), Mut_Term(a,f,l)
+	when same_locs p.pred_loc l && x.term_loc = a.term_loc ->
+	 Logic_const.prel (r,f x,y)
+      | Prel(r,x,y), Mut_Term(a,f,l)
+	when same_locs p.pred_loc l && y.term_loc = a.term_loc ->
+	 Logic_const.prel (r,x,f y)
+      | Pnot(p'), Mut_Pnot(_,l) when same_locs p.pred_loc l -> p'
+      | Pand(p1,p2), Mut_And(_,side,l) when same_locs p.pred_loc l ->
+	 if side then p2 else p1
+      | _ -> p
+    in Cil.ChangeDoChildrenPost (p, f)
 
-  method! vterm term = match term.term_node, mut with
-  | TBinOp(o,x,y), Mut_TBinOp(w,z,l) when same_locs term.term_loc l && o = w ->
-    Cil.ChangeDoChildrenPost
-      (term, fun t -> Logic_const.term (TBinOp(z,x,y)) t.term_type)
-  | _ -> Cil.JustCopy
+  method! vterm term =
+    let f term = match term.term_node, mut with
+      | TBinOp(o,x,y), Mut_TBinOp(w,z,l)
+	when same_locs term.term_loc l && o = w ->
+	 Logic_const.term (TBinOp(z,x,y)) term.term_type
+      | _ -> term
+    in Cil.ChangeDoChildrenPost (term, f)
 
-  method! vexpr exp = match exp.enode, mut with
-  | BinOp (o1,x,y,t), Mut_BinOp (o2,z,l) when same_locs exp.eloc l && o1 = o2 ->
-    Cil.ChangeDoChildrenPost (exp, fun e -> Cil.new_exp e.eloc (BinOp(z,x,y,t)))
-  | _ -> Cil.JustCopy
+  method! vexpr exp =
+    let f exp = match exp.enode, mut with
+      | BinOp (o1,x,y,t), Mut_BinOp (o2,z,l)
+	when same_locs exp.eloc l && o1 = o2 ->
+	 Cil.new_exp exp.eloc (BinOp(z,x,y,t))
+      | _ -> exp
+    in Cil.ChangeDoChildrenPost (exp, f)
 
-  method! vstmt_aux stmt = match stmt.skind, mut with
-  | If (e, x, y, loc), Mut_If (_, _, l) when same_locs loc l ->
-    let e = Cil.new_exp loc (UnOp (LNot, e, Cil.intType)) in
-    Cil.ChangeDoChildrenPost (stmt, fun s -> {s with skind = If (e, x, y, loc)})
-  | _ -> Cil.JustCopy
+  method! vstmt_aux stmt =
+    let f stmt = match stmt.skind, mut with
+      | If (e, x, y, loc), Mut_If (_, new_e, l) when same_locs loc l ->
+	 {stmt with skind = If (new_e e, x, y, loc)}
+      | _ -> stmt
+    in Cil.ChangeDoChildrenPost (stmt, f)
 end
 
 
