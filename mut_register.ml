@@ -321,14 +321,14 @@ class mutation_visitor prj mut =
       Cil.ChangeDoChildrenPost (stmt, f)
   end
 
-let rec mutate summary_file fct cpt = function
+let rec mutate filename summary_file fct cpt = function
   | [] -> ()
   | _ when Mut_options.Only.get () <> -1 && Mut_options.Only.get () < cpt -> ()
   | _ :: t when Mut_options.Only.get () <> -1 && Mut_options.Only.get () > cpt
     ->
-      mutate summary_file fct (cpt + 1) t
+      mutate filename summary_file fct (cpt + 1) t
   | h :: t ->
-      let file = "mutant_" ^ string_of_int cpt ^ ".c" in
+      let file = filename ^ "_" ^ string_of_int cpt ^ ".c" in
       let dkey = Mut_options.dkey_progress in
       Mut_options.Self.feedback ~dkey "mutant %i %a" cpt pp_mutation h ;
       let str_mutation = Format.asprintf "%a" pp_mutation h in
@@ -357,11 +357,13 @@ let rec mutate summary_file fct cpt = function
       in
       Project.on project print_in_file () ;
       Project.remove ~project () ;
-      mutate summary_file fct (cpt + 1) t
+      mutate filename summary_file fct (cpt + 1) t
 
 let run () =
   if Mut_options.Enabled.get () then (
-    let filename = List.hd (Kernel.Files.get ()) in
+    let filename =
+      List.hd (String.split_on_char '.' (List.hd (Kernel.Files.get ())))
+    in
     let funcname = Kernel_function.get_name (fst (Globals.entry_point ())) in
     let g = new gatherer funcname in
     Visitor.visitFramacFile (g :> Visitor.frama_c_inplace) (Ast.get ()) ;
@@ -370,7 +372,7 @@ let run () =
     let dkey = Mut_options.dkey_progress in
     Mut_options.Self.feedback ~dkey "%i mutants" n_mutations ;
     let summary_file = open_out (Mut_options.Summary_File.get ()) in
-    mutate summary_file funcname 0 mutations ;
+    mutate filename summary_file funcname 0 mutations ;
     flush summary_file ;
     close_out summary_file )
 
