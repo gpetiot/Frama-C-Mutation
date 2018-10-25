@@ -12,6 +12,7 @@ Here are the corresponding versions of Frama-C for each version of Mutation:
 
 | Frama-C        |  Mutation  |
 | -------------- | ---------- |
+| v17 Chlorine   |  v0.3.x    |
 | v16 Sulfur     |  v0.2.x    |
 
 

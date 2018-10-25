@@ -345,8 +345,7 @@ let rec mutate filename summary_file fct cpt = function
         let out_file = open_out file in
         Mut_options.Self.feedback ~dkey:Mut_options.dkey_mutant "mutant %i:"
           cpt ;
-        let dkeys = Mut_options.Self.Debug_category.get () in
-        if Datatype.String.Set.mem "mutant" dkeys then
+        if Mut_options.Self.is_debug_key_enabled Mut_options.dkey_mutant then
           Buffer.output_buffer stdout buf ;
         Buffer.output_buffer out_file buf ;
         Format.pp_print_flush fmt () ;

@@ -69,6 +69,24 @@ headers::
 		*.ml *.mli \
 		Makefile.in configure.ac
 
+##########
+# Merlin #
+#########
+
+.PHONY:merlin
+.merlin merlin: $(FRAMAC_SHARE)/Makefile.config
+#create Merlin file
+	$(PRINT_MAKING) $@
+	echo "FLG -c $(FLAGS) $(FRAMAC_USER_MERLIN_FLAGS)" > .merlin
+	for PKG in $(LIBRARY_NAMES); do echo PKG $$PKG >> .merlin; done
+	for PKG in $(LIBRARY_NAMES_GUI); do echo PKG $$PKG >> .merlin; done
+	for PKG in $(MERLIN_PACKAGES); do echo PKG $$PKG >> .merlin; done
+	echo "B $(FRAMAC_LIBDIR)" >> .merlin
+	echo "B $(FRAMAC_LIBDIR)/plugins" >> .merlin
+	echo "B $(FRAMAC_LIBDIR)/plugins/gui" >> .merlin
+	find . \( -name '.*' -o -name tests -o -name doc -o -name '*.cache' \) -prune \
+	      -o \( -type d -exec printf "B %s\n" {} \; -exec printf "S %s\n" {} \; \) >> .merlin
+
 #####################################
 # Regenerating the Makefile on need #
 #####################################
