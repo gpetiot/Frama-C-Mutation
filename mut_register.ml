@@ -38,6 +38,15 @@ let pp_mutation fmt = function
       Format.fprintf fmt "%a: %a cut %s" Printer.pp_location loc
         Printer.pp_predicate p side
 
+let pp_mutation fmt m =
+  let funcs = Format.pp_get_formatter_out_functions fmt () in
+  let out_newline () = () in
+  let out_spaces x = if x > 0 then funcs.out_string " " 0 1 else () in
+  let funcs' = {funcs with out_newline; out_spaces; out_indent= out_spaces} in
+  Format.pp_set_formatter_out_functions fmt funcs' ;
+  pp_mutation fmt m ;
+  Format.pp_set_formatter_out_functions fmt funcs
+
 let other_binops = function
   | PlusA -> [MinusA; Mult]
   | MinusA -> [PlusA; Mult]
